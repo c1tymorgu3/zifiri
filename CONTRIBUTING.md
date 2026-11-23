@@ -43,7 +43,7 @@ Short, neutral, about the change — what it does, in the imperative, one line, 
 speaks for itself.
 
 ```
-add batch pool floor check
+add queue floor check
 drop session id from chat frames
 fix WAL truncation after delete
 ```
