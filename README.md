@@ -19,13 +19,13 @@
 
 ---
 
-No account, no email, no session, no cookie, no author column. You generate a key in the
-browser, post, and the server keeps a row that has no path back to you.
+No account, no session, no cookie, no author column. You generate a key in the browser, post,
+and the server keeps a row with no path back to you.
 
-The part worth reading is not the missing login form. It is the number behind it. A message
-does not go out when you press send. It joins a ten-minute bucket, the bucket is padded with
-decoys to exactly 120 entries, and the whole bucket is shuffled before anyone can read it.
-Somebody watching the wire has 120 candidates and no way to tell which one you wrote.
+The number that matters is 120. A message does not leave when you press send: it joins a
+ten-minute bucket, the bucket fills with decoys to exactly 120 entries, and the whole thing is
+shuffled before anyone reads it. Somebody watching the wire has 120 candidates and no way to
+tell which one you wrote.
 
 Every claim below carries an ID, and every ID has a command that can refute it. If a claim
 cannot be checked, it does not belong in this file.
@@ -49,9 +49,18 @@ until you export it as one line of text.
 | **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a random 16-byte mailbox id | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
 | **Listings** | classifieds with plaintext title, price and category, and a padded body | `listings`, UTC day, non-unique `owner_hash` |
 
-## What it does not hide
+## What it looks like
 
-Three things, stated once so nobody has to discover them later.
+<p align="center">
+  <img src="docs/shots/v2-rooms-390.png" alt="Rooms, phone" width="145">
+  <img src="docs/shots/v2-messages-390.png" alt="Messages, phone" width="145">
+  <img src="docs/shots/v2-listings-390.png" alt="Listings, phone" width="145">
+  <img src="docs/shots/v2-rooms-1280.png" alt="Rooms, desktop" width="445">
+</p>
+
+<p align="center"><sub>Rooms, Messages and Listings on a phone, next to the same room on a desktop. Sample data.</sub></p>
+
+## What it does not hide
 
 - On clearnet, the path in front of the application sees your IP. Run the onion service and it
   does not.
