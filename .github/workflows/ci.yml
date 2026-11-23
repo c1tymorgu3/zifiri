@@ -500,6 +500,16 @@ jobs:
       - name: compile
         run: mix compile --warnings-as-errors
 
+      # The built client is git-ignored, so the job has to produce it or `/`
+      # answers 404 and the browser pass fails for the wrong reason.
+      - name: build the client into priv/static
+        run: |
+          set -euo pipefail
+          npm ci --prefix client
+          npm run build --prefix client
+          mkdir -p priv/static
+          cp -r client/dist/. priv/static/
+
       - name: prepare the dev database
         run: |
           mix ecto.create --quiet 2>/dev/null || true
