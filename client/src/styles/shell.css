@@ -1,0 +1,353 @@
+/* ---------------------------------------------------------------------------
+   Application shell — DESIGN.md: "Kamu hizmeti, 2026".
+   Rail of icon+label on desktop, the same list as a bottom tab bar on a phone.
+   Rules, not boxes: the only borders in here are the rail's hairline and the
+   skip link, which is a control.
+   --------------------------------------------------------------------------- */
+
+/*
+ * Tokens are declared on the shell as well as on :root. The page may already
+ * carry an older palette on :root; re-declaring here means everything inside
+ * the shell resolves to DESIGN.md's values no matter which stylesheet loaded
+ * last, without editing a file this module does not own.
+ */
+:root,
+.zf-shell {
+  --bg: #0b0c0e;
+  --surface: #121417;
+  --fg: #f2f3f5;
+  --muted: #9aa0a8;
+  --line: #24272c;
+  --accent: #e8a33d;
+  --danger: #d9534f;
+  --ok: #4fa86a;
+
+  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 12 / 13 / 15 / 18 / 24 / 32 — body 15, line-height 1.6. */
+  --text-12: 0.75rem;
+  --text-13: 0.8125rem;
+  --text-15: 0.9375rem;
+  --text-18: 1.125rem;
+  --text-24: 1.5rem;
+  --text-32: 2rem;
+
+  /* 8px baseline: 4 / 8 / 12 / 16 / 24 / 32 / 48. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --rail: 96px;
+  --measure: 1040px;
+  --tap: 44px;
+  --hairline: 1px solid var(--line);
+  --radius: 6px;
+  --dur: 120ms;
+  --ease: ease-out;
+}
+
+.zf-shell {
+  color-scheme: dark;
+  /* A fixed viewport box, not a min-height: with `min-block-size` the 1fr row
+     grows to its content, which is how the composer ended up under the phone
+     tab bar. Scrolling happens inside .zf-main. */
+  block-size: 100dvh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "rail top"
+    "rail main";
+  min-block-size: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-15);
+  line-height: 1.6;
+  /* Every clock, count and price in the product lines up on the same grid. */
+  font-variant-numeric: tabular-nums;
+}
+
+.zf-shell *,
+.zf-shell *::before,
+.zf-shell *::after {
+  box-sizing: border-box;
+}
+
+.zf-shell ::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Focus is one ring everywhere: 2px amber, 2px offset. */
+.zf-shell :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------- skip link */
+
+.zf-skip {
+  position: absolute;
+  inset-block-start: -100px;
+  inset-inline-start: var(--space-2);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--text-13);
+  font-weight: 500;
+  text-decoration: none;
+  transition: inset-block-start var(--dur) var(--ease);
+}
+
+.zf-skip:focus-visible {
+  inset-block-start: var(--space-2);
+}
+
+/* -------------------------------------------------------------------- rail */
+
+.zf-rail {
+  grid-area: rail;
+  position: sticky;
+  inset-block-start: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
+  padding-block: var(--space-2);
+  border-inline-end: var(--hairline);
+  background: var(--bg);
+}
+
+.zf-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zf-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  inline-size: 100%;
+  min-block-size: 64px;
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  /* The rule is always 2px wide and transparent, so marking the active
+     surface never shifts the label by a pixel. */
+  border-inline-start: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-12);
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease);
+}
+
+.zf-tab:hover {
+  color: var(--fg);
+}
+
+/* One accent per region: the surface you are on. */
+.zf-tab[aria-current="page"] {
+  color: var(--accent);
+  border-inline-start-color: var(--accent);
+}
+
+.zf-tab-icon {
+  display: block;
+  flex: none;
+}
+
+.zf-tab-label {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------- top strip */
+
+.zf-topbar {
+  grid-area: top;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-block-size: 48px;
+  padding: var(--space-1) var(--space-8);
+  background: var(--bg);
+}
+
+/* The one honest label in demo mode: it says what the data is, nothing more. */
+.zf-badge {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  letter-spacing: 0.02em;
+}
+
+.zf-identity {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: end;
+  cursor: pointer;
+}
+
+.zf-identity:hover .zf-identity-value {
+  color: var(--accent);
+}
+
+.zf-identity-label {
+  color: var(--muted);
+  font-size: var(--text-12);
+  font-weight: 500;
+}
+
+.zf-identity-value {
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  overflow-wrap: anywhere;
+  transition: color var(--dur) var(--ease);
+}
+
+.zf-identity[data-state="none"] .zf-identity-value {
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------- main */
+
+.zf-main {
+  grid-area: main;
+  inline-size: 100%;
+  max-inline-size: var(--measure);
+  min-inline-size: 0;
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-8) var(--space-12);
+}
+
+/* The skip link focuses this container; a ring around the whole page is noise. */
+.zf-main:focus-visible {
+  outline: none;
+}
+
+/* ------------------------------------------------------------ phone layout */
+
+@media (max-width: 60rem) {
+  .zf-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "top"
+      "main";
+  }
+
+  .zf-topbar {
+    padding-inline: var(--space-4);
+  }
+
+  .zf-rail {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    inset-block-start: auto;
+    z-index: 10;
+    flex-direction: row;
+    block-size: auto;
+    padding-block: 0;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+    border-inline-end: 0;
+    border-block-start: var(--hairline);
+  }
+
+  .zf-rail-list {
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 0;
+  }
+
+  .zf-rail-slot {
+    flex: 1 1 0;
+  }
+
+  .zf-tab {
+    min-block-size: 56px;
+    border-inline-start: 0;
+    /* The rule moves to the top edge of the bar, where the eye already is. */
+    border-block-start: 2px solid transparent;
+  }
+
+  .zf-tab[aria-current="page"] {
+    border-inline-start-color: transparent;
+    border-block-start-color: var(--accent);
+  }
+
+  /* On a phone the fingerprint stays in the top strip, where the brief puts
+     it; only the label is folded away so eight characters fit. */
+  .zf-identity-label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .zf-identity-value {
+    font-size: var(--text-12);
+  }
+
+  .zf-main {
+    max-inline-size: none;
+    margin-inline: 0;
+    /* The row is 1fr, but a grid item's auto min-size lets content push it
+       past the viewport — and then the composer slides under the tab bar. */
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-4) calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zf-shell,
+  .zf-shell *,
+  .zf-shell *::before,
+  .zf-shell *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

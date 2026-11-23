@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="Hesap yok, satırda yazar yok. Odalar, mesajlar ve ilanlar." />
+    <title>zifiri</title>
+    <link rel="stylesheet" href="/src/app.css" />
+  </head>
+  <body>
+    <!--
+      The shell is drawn by src/main.ts. What sits here is its skeleton, so the
+      first paint is the layout rather than a blank page, and the three surfaces
+      exist before the module loads. main.ts replaces this subtree; nothing
+      below is read afterwards.
+    -->
+    <div id="app">
+      <div class="zf-boot">
+        <nav class="zf-boot-rail" aria-label="Bölümler">
+          <span class="zf-boot-tab" aria-current="page">Odalar</span>
+          <span class="zf-boot-tab">Mesajlar</span>
+          <span class="zf-boot-tab">İlanlar</span>
+        </nav>
+        <main class="zf-boot-main">
+          <p class="zf-boot-note">yükleniyor…</p>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

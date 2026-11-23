@@ -1,0 +1,539 @@
+/* ---------------------------------------------------------------------------
+   Odalar — room index, message stream, composer.
+   Tokens come from shell.css (DESIGN.md §Colour / §Type / §Layout). Nothing
+   here invents a colour, a size or a duration.
+   --------------------------------------------------------------------------- */
+
+.zf-rooms {
+  display: grid;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  align-items: stretch;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* Rules, not boxes: the index is separated by a hairline, not a card. */
+.zf-rooms-index {
+  min-inline-size: 0;
+  padding-inline-end: var(--space-4);
+  border-inline-end: var(--hairline);
+}
+
+.zf-panel-title {
+  margin: 0 0 var(--space-2);
+  color: var(--fg);
+  font-size: var(--text-18);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.zf-room-pane {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  block-size: 100%;
+  padding-inline-start: var(--space-6);
+}
+
+/* --------------------------------------------------------------- room rows */
+
+.zf-rooms-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zf-room-slot + .zf-room-slot {
+  border-block-start: var(--hairline);
+}
+
+.zf-room {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  /* 48px rows per DESIGN.md §Layout. */
+  min-block-size: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  /* Always 2px, transparent until this is the room you are reading. */
+  border-inline-start: 2px solid transparent;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.zf-room:hover {
+  background: var(--surface);
+}
+
+.zf-room[aria-current="true"] {
+  border-inline-start-color: var(--accent);
+  background: var(--surface);
+}
+
+.zf-room-name {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--text-15);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zf-room-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-12);
+}
+
+.zf-room-time {
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  white-space: nowrap;
+}
+
+/* Unread is weight plus colour, never colour alone. */
+.zf-room-unread {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A dot only when presence is on; the label carries the meaning. */
+.zf-room-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+/* ------------------------------------------------------------- room header */
+
+.zf-room-head {
+  display: grid;
+  gap: 2px;
+  padding-block-end: var(--space-3);
+  border-block-end: var(--hairline);
+}
+
+.zf-room-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--text-18);
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zf-room-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-12);
+}
+
+.zf-room-sub[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- stream */
+
+/* Fills the pane and scrolls; no 60vh cap, because a cap leaves the composer
+   floating in the middle of the page on a tall window. */
+.zf-stream {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The newest line sits next to the composer, not halfway up the page: with a
+   short room the slack belongs above the messages, not below them. `auto`
+   collapses to 0 as soon as the list is taller than the stream. */
+.zf-stream-list {
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 44px rows, text first, clock last. No avatar, no name, no status tick. */
+.zf-msg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-block-size: 44px;
+  padding-block: var(--space-2);
+  border-block-start: var(--hairline);
+}
+
+.zf-msg:first-child {
+  border-block-start: 0;
+}
+
+.zf-msg-body {
+  max-inline-size: 68ch;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  font-size: var(--text-15);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.zf-msg-clock {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- composer */
+
+.zf-composer {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: var(--hairline);
+}
+
+.zf-composer[hidden] {
+  display: none;
+}
+
+.zf-composer-input {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 5.5rem;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-15);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.zf-composer-input::placeholder {
+  color: var(--muted);
+}
+
+.zf-composer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Segmented switch. It is a form control, so a 1px border is allowed here. */
+.zf-modes {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.zf-mode {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-13);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+
+.zf-mode + .zf-mode {
+  border-inline-start: var(--hairline);
+}
+
+.zf-mode:hover {
+  color: var(--fg);
+}
+
+/* The input keeps its place in the tab order; only its box is invisible. */
+.zf-mode-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.zf-mode:has(.zf-mode-input:checked) {
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.zf-mode-input:focus-visible + .zf-mode-label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.zf-mode-label {
+  pointer-events: none;
+}
+
+.zf-anonymity {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.zf-counter {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.zf-counter[data-state="over"] {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.zf-send {
+  min-block-size: var(--tap);
+  min-inline-size: 6rem;
+  padding-inline: var(--space-6);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-ui);
+  font-size: var(--text-13);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.zf-send:disabled {
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.zf-consequence {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-13);
+}
+
+.zf-pending {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.zf-pending[hidden] {
+  display: none;
+}
+
+/* Proof of work is a fact while it runs: attempts counted, cancel available. */
+.zf-pow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.zf-pow[hidden] {
+  display: none;
+}
+
+.zf-pow-bar {
+  inline-size: 7rem;
+  block-size: 2px;
+  border: 0;
+  appearance: none;
+  background: linear-gradient(90deg, var(--line) 0 30%, var(--accent) 30% 50%, var(--line) 50%);
+  background-size: 200% 100%;
+  animation: zf-pow-slide 1.2s linear infinite;
+}
+
+.zf-pow-bar::-webkit-progress-bar {
+  background: var(--line);
+}
+
+.zf-pow-bar::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.zf-pow-bar::-moz-progress-bar {
+  background: var(--accent);
+}
+
+@keyframes zf-pow-slide {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.zf-pow-label {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.zf-pow-cancel {
+  min-block-size: 32px;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: var(--text-12);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.zf-pow-cancel:hover {
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------- empty states */
+
+.zf-empty {
+  max-inline-size: 68ch;
+  margin: 0;
+  padding-block: var(--space-6);
+  color: var(--muted);
+  font-size: var(--text-15);
+}
+
+/* Screen-reader text: present in the DOM, absent from the picture. */
+.zf-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus ring for the surface on its own; the shell sets the same ring. */
+.zf-rooms :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------- phone layout */
+
+@media (max-width: 60rem) {
+  /* Stacked: the page flows and scrolls. A 100%-tall grid would push the
+     composer under the fixed tab bar, which is what it did before. */
+  .zf-rooms {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    block-size: auto;
+  }
+
+  .zf-rooms-index {
+    padding-inline-end: 0;
+    padding-block-end: var(--space-4);
+    border-inline-end: 0;
+    border-block-end: var(--hairline);
+  }
+
+  /* On a phone the index is a strip of room chips, not a 200px column of
+     rows: the vertical space belongs to the messages and the composer. */
+  .zf-rooms-index {
+    padding-block-end: var(--space-3);
+  }
+
+  .zf-rooms-index-body {
+    max-block-size: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .zf-rooms-list {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .zf-room-slot {
+    flex: 0 0 auto;
+  }
+
+  .zf-room-slot + .zf-room-slot {
+    border-block-start: 0;
+  }
+
+  .zf-room {
+    grid-template-columns: auto auto;
+    inline-size: auto;
+    min-block-size: var(--tap);
+    padding-inline: var(--space-3);
+    border: var(--hairline);
+    border-inline-start: var(--hairline);
+    border-radius: var(--radius);
+  }
+
+  .zf-room[aria-current="true"] {
+    border-color: var(--accent);
+    border-inline-start-color: var(--accent);
+  }
+
+  /* The chip carries the name and the unread count; time and presence would
+     not survive the width, and a cropped dot says less than nothing. */
+  .zf-room-time,
+  .zf-room-dot {
+    display: none;
+  }
+
+  .zf-room-pane {
+    padding-inline-start: 0;
+    block-size: auto;
+  }
+
+  /* A tall stream on a phone would put the composer two screens down. */
+  .zf-stream {
+    max-block-size: 52vh;
+  }
+
+  .zf-composer-bar {
+    gap: var(--space-2);
+  }
+
+  /* A 5.5rem box plus the mode row is most of a phone screen. */
+  .zf-composer-input {
+    min-block-size: 4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zf-rooms *,
+  .zf-rooms *::before,
+  .zf-rooms *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

@@ -1,0 +1,788 @@
+/*
+ * Messages (1:1) and identity surfaces — DESIGN.md, "Kamu hizmeti, 2026".
+ *
+ * Scoped tokens: these two surfaces carry their own copy of the palette so the
+ * components never depend on a global theme object that another surface may
+ * retune. Values are DESIGN.md's, not approximations; the only derived colour
+ * is `--dm-ink-on-accent` (#0B0C0E), because accent never carries light text.
+ *
+ * Rules that matter:
+ *  - hairlines separate rows, never boxes around them;
+ *  - --dm-danger appears only inside `.identity-danger`, and it is a border
+ *    and a label, not a decorative fill;
+ *  - the identity string and every clock are monospace with tabular figures;
+ *  - nothing moves except state changes (120ms), and reduced motion turns
+ *    even that off.
+ */
+
+.dm,
+.identity-view {
+  --dm-bg: #0b0c0e;
+  --dm-surface: #121417;
+  --dm-fg: #f2f3f5;
+  --dm-muted: #9aa0a8;
+  --dm-line: #24272c;
+  --dm-accent: #e8a33d;
+  --dm-danger: #d9534f;
+  --dm-ok: #4fa86a;
+
+  --dm-ink-on-accent: #0b0c0e;
+
+  --dm-step-1: 4px;
+  --dm-step-2: 8px;
+  --dm-step-3: 12px;
+  --dm-step-4: 16px;
+  --dm-step-5: 24px;
+  --dm-step-6: 32px;
+
+  --dm-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --dm-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+  background: var(--dm-bg);
+  color: var(--dm-fg);
+  font-family: var(--dm-ui);
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+.dm *,
+.identity-view * {
+  box-sizing: border-box;
+}
+
+/* Visible focus everywhere, 2px amber, offset so it never hides on a hairline. */
+.dm :is(button, input, textarea, [tabindex]):focus-visible,
+.identity-view :is(button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--dm-accent);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+ * Panel frame
+ * ---------------------------------------------------------------------- */
+
+.dm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-3);
+  max-width: 1040px;
+  padding: var(--dm-step-4);
+}
+
+.dm-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--dm-step-4);
+  padding-block-end: var(--dm-step-3);
+  border-block-end: 1px solid var(--dm-line);
+}
+
+.dm-head h2 {
+  margin: 0;
+  /* Page title, one step above the body: 15 -> 24 is the only jump on the
+   * scale that clears the 1.25 hierarchy rule without inventing a size. */
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.dm-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dm-step-2);
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dm-muted);
+  cursor: pointer;
+}
+
+.dm-toggle input {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
+  accent-color: var(--dm-accent);
+}
+
+.dm-note {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 13px;
+  color: var(--dm-muted);
+}
+
+.dm-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+/* -------------------------------------------------------------------------
+ * Conversation list
+ * ---------------------------------------------------------------------- */
+
+.dm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-inline-end: 1px solid var(--dm-line);
+}
+
+.dm-list > li + li {
+  border-block-start: 1px solid var(--dm-line);
+}
+
+.dm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "fp meta"
+    "preview meta";
+  gap: var(--dm-step-1) var(--dm-step-3);
+  inline-size: 100%;
+  min-height: 56px;
+  padding: 10px var(--dm-step-3);
+  border: 0;
+  border-inline-start: 2px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.dm-row:hover {
+  background: var(--dm-surface);
+}
+
+.dm-row[aria-current="true"] {
+  border-inline-start-color: var(--dm-accent);
+  background: var(--dm-surface);
+}
+
+.dm-fp {
+  grid-area: fp;
+  font-family: var(--dm-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dm-preview {
+  grid-area: preview;
+  overflow: hidden;
+  color: var(--dm-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: var(--dm-step-2);
+  color: var(--dm-muted);
+  font-size: 12px;
+}
+
+.dm-when {
+  font-family: var(--dm-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A count, not a chip: DESIGN allows borders only on inputs and danger. */
+.dm-unread {
+  min-inline-size: 20px;
+  color: var(--dm-fg);
+  font-family: var(--dm-mono);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Presence: dot and word together, so colour is never the only signal. */
+.dm-dot {
+  display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  flex: none;
+  background: var(--dm-muted);
+}
+
+.dm-dot--ok {
+  background: var(--dm-ok);
+}
+
+.dm-dot--idle {
+  background: var(--dm-muted);
+}
+
+/* -------------------------------------------------------------------------
+ * Thread — hairline rows, no bubbles
+ * ---------------------------------------------------------------------- */
+
+.dm-thread {
+  min-inline-size: 0;
+  padding-inline-start: var(--dm-step-4);
+}
+
+.dm-thread-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--dm-step-3);
+  padding-block: var(--dm-step-2) var(--dm-step-3);
+  border-block-end: 1px solid var(--dm-line);
+}
+
+.dm-thread-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dm-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dm-step-2);
+  margin: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+}
+
+.dm-messages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.dm-msg {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dm-step-3);
+  min-height: 44px;
+  padding-block: var(--dm-step-3);
+  border-block-start: 1px solid var(--dm-line);
+}
+
+.dm-msg:first-child {
+  border-block-start: 0;
+}
+
+.dm-clock {
+  flex: 0 0 52px;
+  color: var(--dm-muted);
+  font-family: var(--dm-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dm-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 68ch;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Own messages: an 8px indent. No colour, no glyph, no name. */
+.dm-msg[data-self="1"] .dm-text {
+  padding-inline-start: var(--dm-step-2);
+}
+
+.dm-empty,
+.dm-pick {
+  margin: 0;
+  padding: var(--dm-step-4) 0;
+  color: var(--dm-muted);
+  font-size: 13px;
+}
+
+/* Loading: static hairline placeholders, no spinner and no pulse. */
+.dm-skeleton {
+  min-height: 56px;
+  padding: 10px var(--dm-step-3);
+  border-block-start: 1px solid var(--dm-line);
+}
+
+.dm-list > li.dm-skeleton:first-child {
+  border-block-start: 0;
+}
+
+.dm-skeleton-bar {
+  display: block;
+  inline-size: 60%;
+  block-size: 10px;
+  margin-block-start: var(--dm-step-3);
+  background: var(--dm-surface);
+}
+
+.dm-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+ * Composer
+ * ---------------------------------------------------------------------- */
+
+.dm-compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-2);
+  padding-block-start: var(--dm-step-3);
+  border-block-start: 1px solid var(--dm-line);
+}
+
+/* Mode switch: Sessiz / Hızlı, and the one-line consequence under it. */
+.dm-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dm-step-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dm-modes .dm-caption {
+  margin: 0;
+  padding: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dm-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dm-step-2);
+  min-height: 44px;
+  color: var(--dm-fg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dm-mode input {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
+  accent-color: var(--dm-accent);
+}
+
+.dm-mode-note {
+  margin: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+}
+
+.dm-mode-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-2);
+}
+
+.dm-mode-ask[hidden] {
+  display: none;
+}
+
+.dm-mode-ask-text {
+  margin: 0;
+  font-size: 13px;
+}
+
+.dm-mode-ask-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dm-step-2);
+}
+
+/* Secondary buttons are text-only: no border, no fill until hover. */
+.dm-mode-yes,
+.dm-mode-no {
+  min-height: 44px;
+  padding-inline: var(--dm-step-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dm-fg);
+  font-family: var(--dm-ui);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.dm-mode-yes:hover,
+.dm-mode-no:hover {
+  background: var(--dm-surface);
+}
+
+.dm-mode-no {
+  color: var(--dm-muted);
+}
+
+.dm-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-1);
+  color: var(--dm-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dm-input {
+  min-block-size: 88px;
+  padding: 10px var(--dm-step-3);
+  border: 1px solid var(--dm-line);
+  border-radius: 0;
+  background: var(--dm-surface);
+  color: var(--dm-fg);
+  font-family: var(--dm-ui);
+  font-size: 15px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.dm-input::placeholder {
+  color: var(--dm-muted);
+}
+
+.dm-compose-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dm-step-3);
+}
+
+.dm-count {
+  color: var(--dm-muted);
+  font-family: var(--dm-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dm-send {
+  min-height: 44px;
+  padding-inline: var(--dm-step-4);
+  border: 0;
+  border-radius: 0;
+  background: var(--dm-accent);
+  color: var(--dm-ink-on-accent);
+  font-family: var(--dm-ui);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 120ms ease-out;
+}
+
+.dm-send:disabled {
+  background: var(--dm-surface);
+  color: var(--dm-muted);
+  cursor: not-allowed;
+}
+
+.dm-status {
+  min-block-size: 1.6em;
+  margin: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+}
+
+/* -------------------------------------------------------------------------
+ * Identity
+ * ---------------------------------------------------------------------- */
+
+.identity-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-3);
+  max-width: 720px;
+  padding: var(--dm-step-4);
+}
+
+.identity-head h2 {
+  margin: 0;
+  padding-block-end: var(--dm-step-2);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.identity-caption {
+  margin: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.identity-line {
+  display: block;
+  padding: var(--dm-step-3);
+  border: 1px solid var(--dm-line);
+  background: var(--dm-surface);
+  color: var(--dm-fg);
+  font-family: var(--dm-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.identity-line[data-empty="1"] {
+  color: var(--dm-muted);
+}
+
+.identity-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dm-step-3);
+}
+
+.identity-fp {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dm-step-2);
+  margin: 0;
+}
+
+.identity-fp-value {
+  font-family: var(--dm-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.identity-copy,
+.identity-import-button,
+.identity-arm,
+.identity-cancel,
+.identity-confirm-button {
+  min-height: 44px;
+  padding-inline: var(--dm-step-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dm-fg);
+  font-family: var(--dm-ui);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.identity-copy:hover,
+.identity-import-button:hover,
+.identity-cancel:hover {
+  background: var(--dm-surface);
+}
+
+.identity-copy:disabled {
+  color: var(--dm-muted);
+  cursor: not-allowed;
+}
+
+.identity-status,
+.identity-import-status,
+.identity-danger-status {
+  min-block-size: 1.6em;
+  margin: 0;
+  color: var(--dm-muted);
+  font-size: 12px;
+}
+
+.identity-warning {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--dm-fg);
+  font-size: 15px;
+}
+
+.identity-import {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dm-step-2);
+  padding-block-start: var(--dm-step-3);
+  border-block-start: 1px solid var(--dm-line);
+}
+
+.identity-import .identity-caption {
+  flex: 1 1 100%;
+}
+
+.identity-import-input {
+  flex: 1 1 260px;
+  min-height: 44px;
+  padding-inline: var(--dm-step-3);
+  border: 1px solid var(--dm-line);
+  border-radius: 0;
+  background: var(--dm-surface);
+  color: var(--dm-fg);
+  font-family: var(--dm-mono);
+  font-size: 13px;
+}
+
+.identity-import-status {
+  flex: 1 1 100%;
+}
+
+/* -------------------------------------------------------------------------
+ * Danger zone — the only place --dm-danger is allowed to appear
+ * ---------------------------------------------------------------------- */
+
+.identity-danger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-2);
+  margin-block-start: var(--dm-step-4);
+  padding: var(--dm-step-4);
+  border: 1px solid var(--dm-danger);
+}
+
+.identity-danger-title {
+  margin: 0;
+  color: var(--dm-danger);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.identity-danger-body {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--dm-muted);
+  font-size: 13px;
+}
+
+.identity-arm {
+  align-self: flex-start;
+  border-color: var(--dm-danger);
+  color: var(--dm-danger);
+}
+
+.identity-arm:hover {
+  background: color-mix(in srgb, var(--dm-danger) 12%, transparent);
+}
+
+.identity-arm:disabled {
+  border-color: var(--dm-line);
+  color: var(--dm-muted);
+  cursor: not-allowed;
+}
+
+.identity-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-2);
+}
+
+.identity-confirm[hidden] {
+  display: none;
+}
+
+.identity-confirm-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dm-step-1);
+  color: var(--dm-muted);
+  font-size: 13px;
+}
+
+.identity-confirm-input {
+  min-height: 44px;
+  padding-inline: var(--dm-step-3);
+  border: 1px solid var(--dm-danger);
+  border-radius: 0;
+  background: var(--dm-surface);
+  color: var(--dm-fg);
+  font-family: var(--dm-mono);
+  font-size: 15px;
+}
+
+.identity-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dm-step-2);
+}
+
+.identity-confirm-button {
+  border-color: var(--dm-danger);
+  background: var(--dm-danger);
+  color: var(--dm-ink-on-accent);
+}
+
+.identity-confirm-button:disabled {
+  border-color: var(--dm-line);
+  background: var(--dm-surface);
+  color: var(--dm-muted);
+  cursor: not-allowed;
+}
+
+.identity-cancel {
+  color: var(--dm-muted);
+}
+
+/* -------------------------------------------------------------------------
+ * Responsive and motion
+ * ---------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .dm {
+    padding: var(--dm-step-4);
+  }
+
+  .dm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dm-list {
+    max-height: 40vh;
+    overflow-y: auto;
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--dm-line);
+  }
+
+  .dm-thread {
+    padding-inline-start: 0;
+  }
+
+  .dm-messages {
+    max-height: none;
+  }
+
+  .identity-view {
+    padding: var(--dm-step-4);
+  }
+}
+
+/* DESIGN: reduced motion keeps opacity changes only, at 0ms. */
+@media (prefers-reduced-motion: reduce) {
+  .dm *,
+  .identity-view * {
+    transition-property: opacity;
+    transition-duration: 0ms;
+    animation: none;
+  }
+}

@@ -1,0 +1,165 @@
+/* The single entry stylesheet: DESIGN.md tokens, then surfaces.
+   The old styles.css is not linked any more — it carried a blue accent
+   (#7cb8ff) and a card layout that contradicted DESIGN.md, and because it was
+   the only stylesheet linked, none of the surface CSS applied at all. */
+
+@import "./styles/shell.css";
+@import "./styles/rooms.css";
+@import "./styles/listings.css";
+@import "./styles/dm.css";
+@import "./styles/states.css";
+@import "./styles/identity.css";
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* `hidden` is used as a state flag in main.ts; a grid/flex class must not win. */
+[hidden] { display: none !important; }
+
+/* 16px root: the rem scale in shell.css is written against it, so --text-15 is
+   15px. Setting the root to 15px silently shrank every step by 6%. */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Not on `html`: a rem font-size on the root resolves against itself, which
+     is how the whole scale ended up 6% small. */
+  font-size: var(--text-15, 0.9375rem);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+body { min-height: 100dvh; }
+
+h1, h2, h3 { line-height: 1.25; margin: 0; }
+p { margin: 0; }
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface, #121417);
+  border: 1px solid var(--line, #24272c);
+  border-radius: 0;
+}
+
+button { cursor: pointer; min-height: 44px; padding: 0 16px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+:focus-visible {
+  outline: 2px solid var(--accent, #e8a33d);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   Entry chrome: the static skeleton in index.html, the panel wrapper each
+   surface lives in, and the two status lines main.ts owns. Everything here is
+   layout and type; colour comes from the tokens above.
+   --------------------------------------------------------------------------- */
+
+.zf-boot {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.zf-boot-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2);
+  border-right: var(--hairline);
+}
+
+.zf-boot-tab {
+  font-size: var(--text-13);
+  color: var(--muted);
+  padding: var(--space-2) var(--space-3);
+}
+
+.zf-boot-tab[aria-current="page"] { color: var(--fg); }
+
+.zf-boot-main {
+  padding: var(--space-6);
+  display: grid;
+  place-content: start;
+}
+
+.zf-boot-note { color: var(--muted); font-size: var(--text-13); }
+
+@media (max-width: 720px) {
+  .zf-boot { grid-template-columns: minmax(0, 1fr); }
+  .zf-boot-rail {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: var(--hairline);
+    padding: var(--space-2) var(--space-3);
+  }
+  .zf-boot-main { padding: var(--space-4); }
+}
+
+.zf-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.zf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  flex: 1;
+}
+
+/* The view fills the panel, so a surface can put its composer at the bottom of
+   the viewport instead of floating it under the last message. */
+.zf-view-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.zf-state-slot { padding: var(--space-4) 0; }
+
+/* The offline rule sits above the surface, not in a toast: it is a fact about
+   the whole page and it stays until the fact changes. */
+.zf-offline {
+  border-left: 2px solid var(--danger);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-13);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.zf-status {
+  min-height: 1.2em;
+  font-size: var(--text-13);
+  color: var(--muted);
+}
+
+.zf-identity-slot { position: relative; }
+
+.zf-identity-head {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--space-2);
+}
+
+.zf-identity-close {
+  background: transparent;
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 0 var(--space-3);
+  font-size: var(--text-13);
+  color: var(--muted);
+}

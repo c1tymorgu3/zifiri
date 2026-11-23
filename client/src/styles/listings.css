@@ -1,0 +1,518 @@
+/*
+ * İlanlar — DESIGN.md "Kamu hizmeti, 2026".
+ *
+ * Kural, kutu değil: ayraçlar 1px `--line`, kenarlık yalnız girdilerde ve
+ * yıkıcı bölgede. Amber tek bir şey için: birincil eylem. Sayılar tabular
+ * mono, çünkü fiyat ve gün alt alta hizalanır.
+ *
+ * Tokenlar yüzeye kapsanmıştır: modül kendi kendine yeter, sayfanın geri
+ * kalanının renklerini ezmez.
+ */
+
+.listings-surface {
+  --bg: #0b0c0e;
+  --surface: #121417;
+  --fg: #f2f3f5;
+  --muted: #9aa0a8;
+  --line: #24272c;
+  --accent: #e8a33d;
+  --danger: #d9534f;
+  --ok: #4fa86a;
+
+  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --measure: 68ch;
+  --row: 56px;
+  --radius: 8px;
+  --step: 8px;
+
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.listings-surface *,
+.listings-surface *::before,
+.listings-surface *::after {
+  box-sizing: inherit;
+}
+
+/* ---------------------------------------------------------------- başlık */
+
+.listings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.listings-heading {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------- düğmeler */
+
+.btn-primary,
+.btn-quiet,
+.btn-danger,
+.listings-filters-toggle,
+.listing-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  /* Amber üstünde daima koyu metin; 600 yalnız başlıklara ayrılmıştır. */
+  color: #0b0c0e;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background: #f0b45a;
+  border-color: #f0b45a;
+}
+
+/* Kutu değil, düğme: ikincil eylem çerçeve taşımaz. */
+.btn-quiet {
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+}
+
+.btn-quiet:hover {
+  background: var(--surface);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(217, 83, 79, 0.12);
+}
+
+.listings-surface :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- filtre */
+
+.listings-filters {
+  display: block;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Mobilde katlanır: kutu değil, alt çizgi — ayraç yeter. */
+.listings-filters-toggle {
+  display: none;
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--fg);
+}
+
+.listings-filters-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.field-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  transition: border-color 120ms ease-out;
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.field-input:hover {
+  border-color: #34383f;
+}
+
+.field-input:focus-visible {
+  border-color: var(--accent);
+}
+
+.field-input:disabled {
+  color: var(--muted);
+  background: #0e1013;
+  cursor: not-allowed;
+}
+
+.field-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+select.field-input {
+  appearance: none;
+  padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.listings-count {
+  margin: 0;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------------------- satır */
+
+.listings-list {
+  border-top: 1px solid var(--line);
+}
+
+.listings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: var(--row);
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.listing:hover {
+  background: var(--surface);
+}
+
+.listing-title {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listing-price {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.listing-price.takas {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.listing-category,
+.chip {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.listing-day,
+.detail-day {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.empty {
+  margin: 0;
+  padding: 24px 4px;
+  color: var(--muted);
+  max-width: var(--measure);
+}
+
+/* ---------------------------------------------------------------- detay */
+
+.listings-panel[hidden] {
+  display: none;
+}
+
+.listings-panel {
+  animation: listings-enter 180ms ease-out;
+}
+
+@keyframes listings-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.listing-detail {
+  padding-top: 16px;
+}
+
+.listing-back {
+  min-height: 44px;
+  padding: 0 12px 0 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+}
+
+.listing-back:hover {
+  color: var(--fg);
+}
+
+.detail-title {
+  margin: 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+  max-width: var(--measure);
+  overflow-wrap: anywhere;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-body {
+  margin: 0 0 24px;
+  max-width: var(--measure);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* ----------------------------------------------------------------- form */
+
+.listing-form {
+  padding-top: 16px;
+  max-width: 560px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.field-area {
+  min-height: 132px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.field-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field-check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.field-check {
+  width: 18px;
+  height: 18px;
+  /* Bölgede tek amber var: gönder düğmesi. */
+  accent-color: var(--fg);
+}
+
+.counter {
+  justify-self: end;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.counter.over {
+  color: var(--danger);
+}
+
+/* Renk tek başına sinyal değil: sınır aşımı yazıyla da söylenir. */
+.counter.over::after {
+  content: " · sınır aşıldı";
+}
+
+.field-error {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.field-error:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------------- mobil */
+
+@media (max-width: 720px) {
+  .listings-filters-toggle {
+    display: inline-flex;
+    margin-bottom: 8px;
+  }
+
+  .listings-filters-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .listings-filters-body.is-collapsed {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .listing {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title price"
+      "chip day";
+    height: auto;
+    min-height: var(--row);
+    padding: 8px 4px;
+    row-gap: 2px;
+    align-content: center;
+  }
+
+  .listing-title {
+    grid-area: title;
+  }
+
+  .listing-price {
+    grid-area: price;
+    justify-self: end;
+  }
+
+  .listing-category {
+    grid-area: chip;
+    justify-self: start;
+  }
+
+  .listing-day {
+    grid-area: day;
+    justify-self: end;
+  }
+}
+
+/* --------------------------------------------------------------- hareket */
+
+@media (prefers-reduced-motion: reduce) {
+  .listings-surface,
+  .listings-surface *,
+  .listings-surface *::before,
+  .listings-surface *::after {
+    animation: none !important;
+    transition-property: opacity !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

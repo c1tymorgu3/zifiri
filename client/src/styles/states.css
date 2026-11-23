@@ -1,0 +1,99 @@
+/* ---------------------------------------------------------------------------
+   Surface states: skeleton, empty, error, offline.
+   DESIGN.md: skeletons match the arriving shape; errors are a reason and a
+   next step; offline is a persistent rule, never a toast.
+   --------------------------------------------------------------------------- */
+
+.zf-skeleton {
+  display: grid;
+  gap: var(--space-3);
+  padding-block: var(--space-6);
+}
+
+.zf-skeleton-row {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+
+.zf-skeleton-line {
+  display: block;
+  inline-size: var(--zf-skeleton-width, 70%);
+  block-size: 12px;
+  border-radius: 2px;
+  background: var(--surface);
+  background-image: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--line) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: zf-skeleton-sweep 1.4s linear infinite;
+}
+
+@keyframes zf-skeleton-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.zf-state {
+  max-inline-size: 60ch;
+  padding-block: var(--space-8);
+}
+
+.zf-state-title {
+  margin: 0 0 var(--space-2);
+  color: var(--fg);
+  font-size: var(--text-18);
+  font-weight: 500;
+}
+
+.zf-state-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-15);
+}
+
+.zf-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-block-start: var(--space-6);
+}
+
+.zf-state-action {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-6);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--text-13);
+  font-weight: 500;
+}
+
+.zf-state-link {
+  color: var(--muted);
+  font-size: var(--text-13);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.zf-state-link:hover {
+  color: var(--fg);
+}
+
+/* A rule across the top of the surface, not a floating box. */
+.zf-offline {
+  margin-block-end: var(--space-3);
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: var(--text-13);
+}
+
+.zf-offline[hidden] {
+  display: none;
+}
