@@ -1,6 +1,6 @@
 defmodule Zifiri.Chat.Decoy do
   @moduledoc """
-  Cover traffic that is a frame like any other (`docs/scope-v5.md` §"Kova").
+  Cover traffic that is a frame like any other (`docs/spec.md` §"The number: bucket size").
 
   ## What a decoy is
 

@@ -281,7 +281,7 @@ export function draftFromFields(fields: ComposeFields): DraftBuild {
 }
 
 /**
- * DESIGN.md hata kopyası: neden bir cümlede, sıradaki adım bir cümlede.
+ * Error copy: the reason in one sentence, the next step in another.
  * `composeListing` nedeni söyler; adım burada eklenir, çünkü adım yüzeye
  * aittir (aynı neden başka yerde başka bir çıkış isteyebilir).
  */

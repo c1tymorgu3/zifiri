@@ -1,7 +1,7 @@
 /**
  * Messages (1:1) surface: conversation list, thread, composer, presence.
  *
- * Three rules from DESIGN.md and scope v5 shape everything below.
+ * Three rules from `docs/spec.md` shape everything below.
  *
  *  1. Rules, not boxes. A thread is a list of rows separated by a hairline:
  *     mono clock, text, nothing else. No bubbles, no avatars, no names —

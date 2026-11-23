@@ -16,7 +16,7 @@
 #      markers are gone or the threshold passes, so the number reported is
 #      "time until the bytes are absent", not "time until the call returned".
 #
-# Threshold (docs/scope-v5.md §4): the bytes are gone within 5 000 ms.
+# Threshold (docs/spec.md §Deletion, docs/measurements.md): the bytes are gone within 5 000 ms.
 #
 #   MIX_ENV=test mix run --no-start scripts/measure/erase_latency.exs
 #   MIX_ENV=test mix run --no-start scripts/measure/erase_latency.exs --listings 50 --threshold-ms 5000

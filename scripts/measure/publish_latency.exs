@@ -8,7 +8,7 @@
 # PoW measurement. The real 20-bit cost is what `pow_browser.js` measures.
 # Pinning the difficulty keeps the server-side number comparable between runs.
 #
-# Threshold (README claim / docs/scope-v5.md §4): p95 < 2 000 ms.
+# Threshold (README claim / docs/spec.md §Measurable targets): p95 < 2 000 ms.
 #
 #   MIX_ENV=test mix run --no-start scripts/measure/publish_latency.exs
 #   MIX_ENV=test mix run --no-start scripts/measure/publish_latency.exs --writes 50 --concurrency 50

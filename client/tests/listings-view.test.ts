@@ -445,7 +445,7 @@ describe("listing form", () => {
 
     const error = form.find((element) => element.dataset.error === "title");
     expect(error?.textContent).toContain("Başlık");
-    // Neden + sıradaki adım: DESIGN.md hata kopyası.
+    // Reason + next step: the error copy rule.
     expect(error?.textContent).toContain("Kısalt");
     expect(error?.textContent).not.toContain("GİZLİ");
     expect(title.getAttribute("aria-invalid")).toBe("true");

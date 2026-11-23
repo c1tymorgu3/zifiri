@@ -215,7 +215,7 @@ zifiri1ISLO6YWRUEWPFN2Q2FJ6MVZYUBPAZBJRTSJAPF22VA6SRYTA5YOACAAAA6ME5JZE
 Independent check with `node -e`: 40 bytes → 64 base32 characters; `"zifiri1"`
 + 64 = **71**, `"zifir1"` + 64 = 70.
 
-**Finding:** the old `docs/identity.md` (now archived) said "70 characters, a
+**Finding:** an earlier identity note said "70 characters, a
 6-character `zifir1` prefix" and is stale. The code uses the `zifiri1` (7)
 prefix and produces 71; `zifir1` is accepted only for decoding older lines.
 `docs/spec.md` §Identity line says 71 — the measurement confirms it. The README

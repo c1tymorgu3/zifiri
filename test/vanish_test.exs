@@ -1,6 +1,6 @@
 defmodule Zifiri.VanishTest do
   @moduledoc """
-  Plan §6.1 and `docs/scope-v5.md`: a level-1 delete removes the row, a level-2
+  Plan §6.1 and `docs/spec.md`: a level-1 delete removes the row, a level-2
   delete removes the bytes. The second half of that sentence is not taken on
   faith here — the database file and its `-wal` are opened as plain binaries and
   searched for the body the user asked to disappear. There is no mocking of

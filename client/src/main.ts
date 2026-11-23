@@ -2,7 +2,7 @@
  * zifiri — the client entry point.
  *
  * One page, three surfaces (Odalar / Mesajlar / İlanlar), an identity panel and
- * a danger zone, exactly as DESIGN.md lays them out. The shell draws the rail,
+ * a danger zone, exactly as the design lays them out. The shell draws the rail,
  * the top strip and the mobile tab bar; this file decides what each surface
  * shows and where its data comes from.
  *

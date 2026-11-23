@@ -1,7 +1,7 @@
 defmodule Zifiri.TimingTest do
   @moduledoc """
-  `docs/scope-v5.md` §2, sessiz mod: bir kova boşaldığında 120 gövde **tek bir
-  anda** çıkar ve sıra, gerçek yazının kaçıncı olduğunu söylememelidir.
+  `docs/spec.md` §Two modes, silent mode: when a bucket closes, 120 bodies come out
+  **at once**, and their order must not say which one is the real message.
 
   İki şey ölçülür:
 

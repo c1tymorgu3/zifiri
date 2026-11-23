@@ -60,8 +60,54 @@ Squash the fixups; one commit per idea.
   fails before the patch.
 - Commits that include `zifiri_dev.db`, `_build/`, `deps/`, or a key of any kind.
 
+## CI jobs
+
+`make check` is three commands (`mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix test`); CI is six jobs, each one a question with an exit code. If a job is
+green, the sentence on the right was executed against that commit.
+
+- **`elixir`** — format check, `mix compile --force --warnings-as-errors`, `mix test` on the OTP and
+  Elixir versions pinned in `.tool-versions`.
+- **`client`** — `npm ci`, `tsc --noEmit`, `vitest run`, `npm run build`, and a bundle-size check
+  under 100 KiB gzip.
+- **`architecture`** — greps over `lib/`, `test/` and `infra/`: no `Logger.info`/`IO.inspect`/`dbg(`,
+  no peer or proxy header read outside `lib/zifiri/transport.ex`, no Ecto `log:`, nginx
+  `access_log off`, container `USER`/`read_only`/`no-new-privileges`.
+- **`claims`** — both `docs/claims.md` and `docs/verify.md` carry the same `C-01`…`C-49` IDs with no
+  gap, and the README cites no ID that `claims.md` does not define.
+- **`docs`** — every relative link in `README.md` and `docs/*.md` resolves to a file in the tree.
+- **`e2e`** — a real Chrome against a running `mix phx.server` loads `/`, `/?demo=1` and
+  `/?demo=1&surface=listings` and asserts on the DOM; gated by a `test -f` job so a fork without
+  `scripts/e2e/run.sh` shows **skipped**, not green.
+
+`docs/ci.md` has the details, the cache keys, the timings, and what is deliberately left to a live
+host.
+
+## Browser pass
+
+`test/` runs the server in-process and `vitest` runs the client in jsdom; neither one loads the
+built bundle in a browser. `docs/e2e.md` is that missing link.
+
+```bash
+make static && scripts/e2e/run.sh      # headless Chrome, --dump-dom + --screenshot, ~10 s
+```
+
+The script reuses a server already answering `/health` on port 4000 and starts its own only if none
+is there; it exits `2` if something else owns the port. Three scenarios: the shell draws three rail
+tabs, `/?demo=1` renders the demo badge and the fixture rows, and `/?demo=1&surface=listings`
+renders the listing list. Any console message from the page fails the run. Exit codes: `0` pass,
+`1` a check failed, `2` the environment is wrong.
+
+`ZIFIRI_E2E_PORT=4010` moves the port, `ZIFIRI_E2E_KEEP=1` keeps the DOM dumps, `CHROME=` points at
+a browser. The plain-HTTP variant is `mix test --include integration test/e2e_test.exs` against a
+running server; it is excluded from `mix test` so the default suite stays offline.
+
 ## Docs
 
-`docs/plan.md` is the contract; code that disagrees with it is a bug, not a doc update. If a patch
-changes a promise, change the plan in the same commit and say so in the message. Prose docs are in
-Turkish, code, comments, commit messages, and these repository files are in English.
+`docs/spec.md` is the contract; code that disagrees with it is a bug, not a doc update. If a patch
+changes a promise, change the spec in the same commit and say so in the message. Every claim is tied
+to a `C-nn` ID in `docs/claims.md` and to a runnable command in `docs/verify.md`; numbers live in
+`docs/measurements.md`, and the reasons behind the design in `docs/decisions.md`.
+
+Every repository file is in English — README, `docs/`, code, comments, commit messages. A Turkish
+comment or a French sentence in a doc is a bug like any other.

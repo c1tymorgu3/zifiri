@@ -1,5 +1,5 @@
 /**
- * The four states every surface owes the user (DESIGN.md "Durumlar").
+ * The four states every surface owes the user (`docs/spec.md` §Work order).
  *
  * Empty and error are sentences, not illustrations; loading is a skeleton of
  * the thing that is coming, so the page does not jump when it arrives. No

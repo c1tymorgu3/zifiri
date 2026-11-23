@@ -60,7 +60,7 @@ The drill script is `bin/drill`. Skeleton in P0, working version in P1. The cont
 | command | what it does | output |
 |---|---|---|
 | `bin/drill canary --ip 172.31.77.7 --body "$BODY"` | pads, solves PoW and builds the envelope with the real client crypto, sends it, waits until it is published | `status=202 bytes=0` |
-| `bin/drill delete --canary "$CANARY"` | "yok ol" over the `own_i` tokens of the posts carrying the canary | `status=204` |
+| `bin/drill delete --canary "$CANARY"` | "vanish" over the `own_i` tokens of the posts carrying the canary | `status=204` |
 | `bin/drill chat --room genel --body "chat-$CANARY"` | joins the chat and sends a message | `status=202` |
 | `bin/drill scan --canary "$CANARY"` | four-leg scan (FS, DB, WAL, journald) | `RED 0` (green) / `RED n` + the matching lines |
 | `bin/drill pow-bench --n 20` | solves the client PoW 20 times, measures the durations | `median=<ms>` |
@@ -178,7 +178,7 @@ No test; envelopes are written directly today.
 `mix test test/leak_test.exs` → `9 passed` (today); the 2026-11-22 snapshot had this red.
 
 ### C-28 — No published claim against A1
-`grep -nE 'A1.*%[0-9]' docs/scope-v5.md | wc -l` → `0`.
+`grep -nE 'A1.*%[0-9]' docs/spec.md | wc -l` → `0`.
 
 ### C-29 — When cover ships, the set against A1 is at most k
 `cover_test`, not written; the text may only say "at most k".
@@ -205,9 +205,9 @@ Client test, not written.
 §12.1 plus `infra/tor/torrc`.
 
 ### C-37 — No claim against A1 in the clearnet copy
-Text audit of `docs/scope-v5.md` §Claim texts.
+Text audit of `docs/spec.md` §Claim texts.
 
-### C-38 — "Yok ol" zeroes the `.db` and `-wal` within five seconds
+### C-38 — "Vanish" zeroes the `.db` and `-wal` within five seconds
 `mix test test/vanish_test.exs` → `33 passed` (today); §12.3 is the manual drill.
 
 ### C-39 — VACUUM is not on the delete path
@@ -521,7 +521,7 @@ development constant (plan §4.3, §11.4).
 
 ## 12. Post-decision rows — network layer and deletion
 
-The runnable counterpart of the decisions in `docs/scope-v5.md` (no claim against A1 on
+The runnable counterpart of the decisions in `docs/spec.md` (no claim against A1 on
 clearnet, deletion N = 5, VACUUM out of the delete path). Three blocks; each gives
 green/red on its own.
 
@@ -577,7 +577,7 @@ Today (2026-11-22): row 1 is `0` (measured with `grep` on Windows; the only matc
 `transport.ex` moduledoc). Row 2 is **green: 2 tests, 0 failures**. Row 3 was **not run →
 none**.
 
-### 12.3 after "yok ol" the marker text is absent from the `.db` and the `-wal`
+### 12.3 after "vanish" the marker text is absent from the `.db` and the `-wal`
 
 ```bash
 export N=5

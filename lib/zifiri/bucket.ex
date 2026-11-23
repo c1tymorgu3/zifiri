@@ -1,13 +1,13 @@
 defmodule Zifiri.Bucket do
   @moduledoc """
-  The ten-minute bucket: the unit of time in the silent mode (`docs/scope-v5.md`).
+  The ten-minute bucket: the unit of time in the silent mode (`docs/spec.md`).
 
   A write is not published when it happens. It is dropped into the bucket that
   covers the current wall-clock ten minutes; when the bucket closes, everything
   in it is shuffled and published as one batch. A passive observer sees `n`
   frames leave together and can pick the real one out of them with probability
   `1/n` — that is the whole anonymity claim, and it is why the batch size is
-  fixed at #{120} rather than "however many arrived" (`§scope-v5`, table).
+  fixed at #{120} rather than "however many arrived" (`docs/spec.md`, table).
 
   ## Fixed cadence, not a full-bucket flush
 
@@ -44,7 +44,7 @@ defmodule Zifiri.Bucket do
 
   @table :zifiri_bucket
 
-  # Ten minutes, the cadence `docs/scope-v5.md` prices at 69 MB/day for 120.
+  # Ten minutes, the cadence `docs/spec.md` prices at 69 MB/day for 120.
   @bucket_ms 600_000
 
   # The batch size the anonymity number is computed from: 1/120 ≈ 0.83% of

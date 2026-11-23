@@ -1,5 +1,5 @@
 /**
- * The application shell: one rail, three surfaces, one identity (DESIGN.md).
+ * The application shell: one rail, three surfaces, one identity (`docs/spec.md`).
  *
  * Layout is the design's, not this module's: a 96px rail of icon-plus-label
  * items on desktop, the same markup as a bottom tab bar on a phone. The CSS
@@ -9,7 +9,7 @@
  * Four deliberate constraints:
  *
  *  - Amber marks exactly one thing: the surface you are on. A second amber
- *    element in the rail would turn the accent into decoration, and DESIGN.md
+ *    element in the rail would turn the accent into decoration, and the design
  *    allows one per region.
  *  - The identity indicator is a fingerprint, not a name. Eight characters in
  *    mono, top right; the full string and its copy button belong to the

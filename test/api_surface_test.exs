@@ -1,6 +1,6 @@
 defmodule Zifiri.ApiSurfaceTest do
   @moduledoc """
-  The scope-v5 HTTP surface: listings, mailbox, rooms, pow and erase.
+  The HTTP surface in `docs/spec.md`: listings, mailbox, rooms, pow and erase.
 
   These tests assert on the wire, not on the contexts behind it: status,
   headers, the fixed response size, and the fact that a refusal is the same

@@ -2,7 +2,7 @@
 
 Plan §11.3: clearnet + onion birlikte. Bu dosya onion tarafının nasıl kurulduğunu,
 neyi çözdüğünü ve **neyi çözmediğini** yazar. İddia/mod eşlemesi:
-`docs/onion-claim.md`. Yapılandırma denetimi: `scripts/verify_onion.sh`.
+`docs/spec.md` §Claim texts. Yapılandırma denetimi: `scripts/verify_onion.sh`.
 
 ## Neden var
 
@@ -87,7 +87,7 @@ istemci → tor devresi (3 düğüm) → bu makinedeki tor daemon
 `HiddenServicePort`'un ilk sayısı **sanal** porttur (tor'un dinlediği 80), ikincisi
 gerçek hedeftir. 8081 dışarı açılmaz; `docker-compose.yml`'de publish edilmez ve
 `listen` yalnız loopback'tedir — yani 8081'e ulaşmanın tek yolu tor'dur. Bu, "IP
-yok" iddiasının yapılandırma karşılığıdır (`docs/onion-claim.md`).
+yok" iddiasının yapılandırma karşılığıdır (`docs/spec.md` §Claim texts).
 
 Doğrulama:
 
@@ -166,7 +166,7 @@ yapılandırmada yazar; ayrıca `verify_onion.sh` "Onion-Location yalnız clearn
 var mı" denetimini bu ayrım üzerinden yapar.
 
 Hangi iddianın hangi modda geçerli olduğu (ve hangisinin **geçersiz** olduğu):
-`docs/onion-claim.md`. Özet: clearnet'te "IP uygulamaya girmez" denir, "IP yok"
+`docs/spec.md` §Claim texts. Özet: clearnet'te "IP uygulamaya girmez" denir, "IP yok"
 denmez; "IP yok" yalnız onion modunda söylenebilir.
 
 ## Neyi gizlemez

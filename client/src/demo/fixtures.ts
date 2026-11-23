@@ -11,8 +11,9 @@
  *     which is the point: what you see in the screenshot is the same code the
  *     server path runs.
  *
- * The copy is deliberately flat — a market street, not a launch. Nothing here
- * claims an anonymity guarantee; that claim lives in the composer, once.
+ * The copy is ordinary on purpose: neighbourhood notices, a second-hand sale,
+ * an evening job. Nothing here claims an anonymity guarantee; that claim lives
+ * in the composer, once.
  */
 import type { DmMessage, DmThread } from "../ui/dm";
 import type { ListingItem } from "../ui/listings";
@@ -62,7 +63,7 @@ export const demoMessages: Readonly<Record<string, readonly RoomMessage[]>> = {
     { id: "l3", body: "kilit yoksa sahibi yakındadır, acele etme", at: NOW - 28 * MINUTE },
     { id: "l4", body: "akşam ilan panosuna bir şey asacağım, göz atın", at: NOW - 12 * MINUTE },
     { id: "l5", body: "burada kimse adını sormuyor, alışana kadar tuhaf geliyor", at: NOW - 5 * MINUTE },
-    { id: "l6", body: "pazar odasında bir ilan var, fiyat yazmıyor: takas", at: NOW - 2 * MINUTE },
+    { id: "l6", body: "alım satım odasında bir ilan var, fiyat yazmıyor: takas", at: NOW - 2 * MINUTE },
   ],
   mahalle: [
     { id: "m1", body: "üst katın suyu kesilmiş, saat 14'e kadar sürer diyorlar", at: NOW - 3 * 60 * MINUTE },
@@ -70,9 +71,9 @@ export const demoMessages: Readonly<Record<string, readonly RoomMessage[]>> = {
     { id: "m3", body: "değiştirdim, ampul bende vardı", at: NOW - 26 * MINUTE },
   ],
   pazar: [
-    { id: "p1", body: "çalışır durumda daktilo, kaseti yok", at: NOW - 8 * 60 * MINUTE },
-    { id: "p2", body: "iki sandalye, ahşap, birinin ayağı çizik", at: NOW - 5 * 60 * MINUTE },
-    { id: "p3", body: "daktiloyu alan oldu mu, hâlâ merak ediyorum", at: NOW - 3 * 60 * MINUTE },
+    { id: "p1", body: "iki sandalye hâlâ duruyor mu, dün ilan vardı", at: NOW - 8 * 60 * MINUTE },
+    { id: "p2", body: "duruyor, ikisi de ahşap, birinin ayağı çizik", at: NOW - 7 * 60 * MINUTE },
+    { id: "p3", body: "akşam üstü bakmaya geleceğim, yer aynı mı", at: NOW - 3 * 60 * MINUTE },
   ],
 };
 
@@ -95,8 +96,8 @@ export const demoThreads: readonly DmThread[] = [
     peer: PEER_ONE,
     peerKey: null,
     messages: [
-      message("t1", PEER_ONE, "daktilo hâlâ sende mi", 58, false),
-      message("t2", PEER_ONE, "bende, kaseti yok ama tuşları sağlam", 54, true),
+      message("t1", PEER_ONE, "monitör ilanı hâlâ geçerli mi", 58, false),
+      message("t2", PEER_ONE, "geçerli, 24 inç, iki ölü piksel var sağ altta", 54, true),
       message("t3", PEER_ONE, "cumartesi bakabilir miyim", 51, false),
       message("t4", PEER_ONE, "olur, iskele tarafında buluşuruz", 48, true),
     ],
@@ -124,11 +125,11 @@ export const demoThreads: readonly DmThread[] = [
 export const demoListings: readonly ListingItem[] = [
   {
     id: "1041",
-    title: "Daktilo, kaseti yok",
+    title: "Monitör, 24 inç, 75 Hz",
     body:
-      "Tuşları sağlam, şeridi yeni. Kaseti kayıp; isteyen kasetiyle birlikte alabilir. " +
-      "Kadıköy, hafta içi akşam.",
-    price: null,
+      "Sağ altta iki ölü piksel var, normal kullanımda görünmüyor. Ayağı ve kablosu dahil. " +
+      "Kadıköy, hafta içi akşam bakılabilir.",
+    price: 145000,
     currency: "TRY",
     category: "elektronik",
     day: "2026-11-21",

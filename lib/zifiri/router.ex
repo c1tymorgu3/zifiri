@@ -325,7 +325,7 @@ defmodule Zifiri.Router do
 
   # -- proof of work ---------------------------------------------------------
 
-  # GET is the scope-v5 form: the owner token is a header, the payload hash is
+  # GET is the form `docs/spec.md` sets: the owner token is a header, the payload hash is
   # public and may be a query parameter. POST stays for clients that already
   # send the token in a body.
   get "/api/pow" do

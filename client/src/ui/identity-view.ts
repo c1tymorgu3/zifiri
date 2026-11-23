@@ -2,7 +2,7 @@
  * Identity surface: the backup line, its fingerprint, import, and the danger
  * zone that makes the identity disappear.
  *
- * The copy is the design here. DESIGN.md asks for the `zifiri1...` string in
+ * The copy is the design here. `docs/spec.md` asks for the `zifiri1...` string in
  * mono, an 8-character fingerprint, a copy button, and one sentence —
  * "Bu satırı kaybedersen kimliğin gider." — and the danger zone is a
  * `--danger` border with a phrase typed by hand, not a red button with a
@@ -29,7 +29,7 @@ import {
 import "../styles/identity.css";
 import { sha256 } from "@noble/hashes/sha2.js";
 
-/** DESIGN.md: an 8-character fingerprint, not the 13 of a peer id. */
+/** The design: an 8-character fingerprint, not the 13 of a peer id. */
 export const FINGERPRINT_LENGTH = 8;
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";

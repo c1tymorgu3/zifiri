@@ -25,7 +25,7 @@ defmodule Zifiri.Mod.Audit do
   claim can become "no single operator could have written this" — today they
   are `1` and `null`, and the chain proves no such thing.
 
-  See `docs/moderation.md`.
+  See `docs/spec.md` §Moderation.
 
   ## Versions
 

@@ -1,6 +1,6 @@
 defmodule Zifiri.Vanish do
   @moduledoc """
-  Deletion that reaches the disk, in two levels (plan §6.1, `docs/scope-v5.md`).
+  Deletion that reaches the disk, in two levels (plan §6.1, `docs/spec.md`).
 
   ## The two levels
 

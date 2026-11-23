@@ -34,7 +34,7 @@ defmodule Zifiri.Presence do
   pins the moment the app was opened to the second, which is a behavioural signal
   with no message attached to it. Fifteen minutes plus an unknown jitter gives
   "recently, within a quarter of an hour" and nothing finer. The numbers behind
-  that trade are in `docs/presence-fastmode.md`.
+  that trade are in `docs/spec.md` §Two modes.
 
   ## Two answers, not three
 

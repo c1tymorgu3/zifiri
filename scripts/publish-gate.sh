@@ -10,7 +10,7 @@
 #   scripts/publish-gate.sh            run the gate
 #   scripts/publish-gate.sh --help     this text
 #
-# See docs/publish-gate.md for which of the ten checklist items are automated.
+# See docs/verify.md for which of the ten checklist items are automated.
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ usage() {
   cat <<'EOF'
 usage: scripts/publish-gate.sh [--help]
 
-Runs the pre-publish checks from docs/publish-gate.md and prints a PASS/FAIL
+Runs the pre-publish checks from the archived checklist and prints a PASS/FAIL
 table. Exit status: 0 = no FAIL, 1 = at least one FAIL, 2 = usage/not a repo.
 
 Checks
@@ -128,7 +128,7 @@ else
   # The scanner's own pattern and its documentation contain the shapes it
   # looks for; excluding them is not a loophole, it is the only way the check
   # can report anything other than itself.
-  capture git grep -nIE "$scan_pattern" -- . ':!scripts/publish-gate.sh' ':!docs/publish-gate.md'
+  capture git grep -nIE "$scan_pattern" -- . ':!scripts/publish-gate.sh' ':!docs/verify.md'
   if [ -z "$OUT" ]; then
     add c PASS "secret scan clean (grep fallback)" "method: $method"
   else
@@ -196,7 +196,7 @@ if [ -f docs/claims.md ] && [ -f docs/verify.md ]; then
   if [ -z "$claims_ids" ] && [ -z "$verify_ids" ]; then
     add h WARN "claims.md / verify.md carry no C-xx claim IDs" \
       "neither file cites a C-01-style ID, so the diff cannot prove they agree.
-Either apply the ID scheme from DECISIONS.md or cross-check the two files by hand."
+Either apply the ID scheme from docs/decisions.md or cross-check the two files by hand."
   elif [ "$claims_ids" = "$verify_ids" ]; then
     add h PASS "claims.md and verify.md cite the same claim IDs ($(printf '%s\n' "$claims_ids" | grep -c . || true) IDs)"
   else
@@ -290,5 +290,5 @@ if [ "$fails" -gt 0 ]; then
   printf 'SONUÇ: FAIL (%d fail, %d uyarı) — depoyu public yapma.\n' "$fails" "$warns"
   exit 1
 fi
-printf 'SONUÇ: PASS (%d uyarı) — uyarıları elle işaretle: docs/publish-gate.md\n' "$warns"
+printf 'RESULT: PASS (%d warnings) — tick the rest by hand: docs/verify.md\n' "$warns"
 exit 0

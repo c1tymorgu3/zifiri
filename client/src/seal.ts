@@ -1,5 +1,5 @@
 /**
- * Sealed sender for 1:1 messages (plan §P0-2, scope-v5 §1:1).
+ * Sealed sender for 1:1 messages (plan §P0-2, `docs/spec.md` §1:1).
  *
  * Wire layout of one envelope:
  *
@@ -60,7 +60,7 @@ export const SEAL_OVERHEAD = SEALED_HEADER_LENGTH + TAG_LENGTH;
 /** recipient_tag + SEAL_OVERHEAD. */
 export const ENVELOPE_OVERHEAD = RECIPIENT_TAG_LENGTH + SEAL_OVERHEAD;
 
-/** Target bucket for a 1:1 envelope (scope-v5 §1:1). */
+/** Target bucket for a 1:1 envelope (`docs/spec.md` §1:1). */
 export const ENVELOPE_BUCKET: PadBucket = 4096;
 /** Length prefix written by `padTo()` (see `pad.ts`). */
 export const PAD_PREFIX_LENGTH = 4;

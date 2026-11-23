@@ -5,7 +5,7 @@ defmodule Zifiri.Mod do
   **The operator is the moderator.** There is one moderator, it is whoever runs
   the server, and there is no second party, no jury and no vote. A moderation
   decision is one line in `Zifiri.Mod.Audit`, written by this process;
-  `docs/moderation.md` says what that record does and does not prove.
+  `docs/spec.md` §Moderation says what that record does and does not prove.
 
   **The threshold is 1 of 1.** `threshold/0` returns `1` and every record
   carries `"threshold": 1` with `"signature": null`. The fields exist so the
@@ -49,7 +49,7 @@ defmodule Zifiri.Mod do
   # to avoid.
   @moderator "operator"
 
-  # 1 of 1. See docs/moderation.md §4 for the 2-of-3 plan.
+  # 1 of 1. See docs/spec.md §Moderation for the 2-of-3 plan.
   @threshold 1
 
   @call_timeout 15_000
