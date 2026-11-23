@@ -1,0 +1,6 @@
+# Deploy artefaktları — repoya girmez, sır içerir.
+nginx.conf.rendered
+certs/
+acme/
+tor/data/
+run/

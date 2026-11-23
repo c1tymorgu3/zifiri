@@ -1,0 +1,68 @@
+# zifiri — onion servisi (tor). plan §11.3, §5.1.
+#
+# torrc repo'dadır (infra/tor/config/torrc): DataDirectory /var/lib/tor,
+# HiddenServicePort 80 → 127.0.0.1:8081 (nginx), ControlPort 0, Log notice
+# stdout. stdout journal'a gider; journald Storage=none olduğu için hiçbir
+# yere yazılmaz (harden.sh adım 5). Bu unit o zincirin son halkasıdır:
+# log dosyası açmaz, açılırsa da yazacak yer yoktur.
+#
+# Debian/Ubuntu: tor paketinin kullanıcısı `debian-tor`. RHEL/Alpine'de ad
+# farklıdır (toranon/tor) — User/Group satırını ona göre değiştir.
+#
+# Bu unit, tor paketinin kendi tor.service'i yerine geçer; ikisini birlikte
+# açma (aynı DataDirectory'ye iki tor). Kurulum:
+#   sudo install -m 0644 infra/systemd/zifiri-tor.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now zifiri-tor
+
+[Unit]
+Description=zifiri onion servisi (tor, sertleştirilmiş)
+Documentation=file:///opt/zifiri/infra/harden.md
+After=network-online.target
+Wants=network-online.target
+# nginx onion listener'ı (127.0.0.1:8081) tor'dan bağımsız açılır; tor
+# düşerse clearnet tarafı çalışmaya devam eder.
+
+[Service]
+Type=simple
+User=debian-tor
+Group=debian-tor
+# --RunAsDaemon 0: ön planda kal, systemd süreci takip etsin (çift fork yok).
+ExecStart=/usr/bin/tor -f /opt/zifiri/infra/tor/config/torrc --RunAsDaemon 0
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# --- sertleştirme --------------------------------------------------------
+NoNewPrivileges=yes
+# Yetenek yok: tor 9050'yi loopback'te açar (>1024), ayrıcalık gerekmez.
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# Tek yazma yolu: onion anahtarı ve tor durumu. Anahtar diske yazılır —
+# şifreleme (LUKS) olmadan bu dizin okunabilir; harden.md §LUKS.
+ReadWritePaths=/var/lib/tor
+StateDirectory=tor
+StateDirectoryMode=0700
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0077
+# tor C ile yazılmıştır, JIT yok: W^X burada zorlanabilir.
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Döküm yok: tor çökerse RAM'deki devre durumu diske düşmesin.
+LimitCORE=0

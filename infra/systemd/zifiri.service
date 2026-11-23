@@ -1,0 +1,113 @@
+# zifiri — Phoenix release. plan §5.1 (log yok), §11.4 (disk ve bellek).
+#
+# Bu unit, release'i DOĞRUDAN host üzerinde çalıştırmak içindir. Varsayılan
+# dağıtım yolu docker compose'dur (infra/docker-compose.yml, infra/deploy.md);
+# aynı sertleştirme ilkeleri orada da geçerli. İkisini birlikte kullanma:
+# aynı SQLite dosyasına iki yazıcı olur.
+#
+# Kurulum (bir kez):
+#   sudo useradd --system --home /var/lib/zifiri --shell /usr/sbin/nologin zifiri
+#   sudo install -d -m 0700 -o root -g root /run/zifiri-pepper
+#   sudo sh -c 'umask 077; head -c 32 /dev/urandom | base64 > /run/zifiri-pepper/pepper'
+#   sudo chmod 0400 /run/zifiri-pepper/pepper        # pepper DİSKTE durmaz, tmpfs
+#   sudo install -m 0644 infra/systemd/zifiri.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now zifiri
+#
+# Pepper: LoadCredential ile verilir. Süreç dosyayı kendi kimliğiyle değil,
+# systemd'nin bu unit için ayırdığı tmpfs kopyasından okur; kopya yalnız bu
+# unit'e görünür ve diske yazılmaz. Dosya yoksa unit AÇILMAZ (fail-fast):
+# pepper'sız bir kurulum, pepper'ı kaybetmiş kurulumla aynı sessiz hatadır.
+
+[Unit]
+Description=zifiri (Phoenix release)
+Documentation=file:///opt/zifiri/infra/harden.md
+After=network-online.target zifiri-tor.service
+Wants=network-online.target zifiri-tor.service
+
+[Service]
+Type=simple
+User=zifiri
+Group=zifiri
+WorkingDirectory=/opt/zifiri
+ExecStart=/opt/zifiri/bin/zifiri start
+# ExecStop yok: `start` ön planda çalışır, systemd SIGTERM'i süreç grubuna
+# verir; BEAM SIGTERM'de kendi kapanışını yapar (Phoenix graceful shutdown).
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStartSec=60
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=2
+
+# --- ortam ---------------------------------------------------------------
+# Yollar runtime.exs varsayılanlarıyla aynı; burada AÇIKÇA yazılı ki unit
+# tek başına okununca nereye yazıldığı belli olsun.
+Environment=ZIFIRI_DB_PATH=/var/lib/zifiri/zifiri.db
+Environment=ZIFIRI_ERR_LOG=/var/lib/zifiri/err.log
+Environment=ZIFIRI_SOCKET=/run/zifiri/http.sock
+Environment=ZIFIRI_PEPPER=%d/pepper
+Environment=HOME=/var/lib/zifiri
+Environment=LANG=C.UTF-8
+Environment=TZ=UTC
+# Dağıtık Erlang/EPMD yok: tek düğüm, dinleyen daemon yok (yüzey kapatma).
+Environment=RELEASE_DISTRIBUTION=none
+# Release betiği pid dosyasını $RELEASE_TMP altına yazar; varsayılan
+# /opt/zifiri/tmp, ProtectSystem=strict ile SALT-OKUNUR olurdu. /run/zifiri
+# hem yazılabilir hem tmpfs (pid diske düşmez).
+Environment=RELEASE_TMP=/run/zifiri
+# Erlang kendi çökme dökümünü de yazmasın: /dev/null + 0 saniye bekleme.
+Environment=ERL_CRASH_DUMP=/dev/null
+Environment=ERL_CRASH_DUMP_SECONDS=0
+LoadCredential=pepper:/run/zifiri-pepper/pepper
+
+RuntimeDirectory=zifiri
+RuntimeDirectoryMode=0750
+StateDirectory=zifiri
+StateDirectoryMode=0700
+
+# --- sertleştirme --------------------------------------------------------
+# Hiçbir yeni yetki yok: setuid ikili, dosya yeteneği, polkit — hiçbiri
+# süreçten yükselemez.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Kök dosya sistemi salt-okunur; yazma yalnız aşağıdaki iki yol + tmpfs.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/zifiri /run/zifiri
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0077
+# Uygulama dış çağrı yapmaz (§11.3): AF_UNIX yeter. INET/INET6 bilinçli
+# olarak açık bırakıldı — bir kütüphane (DNS, telemetri) sessizce inet
+# açmaya kalkarsa çökmesin; yüzeyi daraltmak istersen yalnız AF_UNIX yaz
+# ve bir hafta boyunca çalışma zamanı hatası olmadığını doğrula.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# --- BEAM JIT: W^X ZORLANAMAZ -------------------------------------------
+# MemoryDenyWriteExecute=yes, mmap/mprotect üzerinden PROT_WRITE|PROT_EXEC
+# ve yazılabilir sayfaya sonradan PROT_EXEC verilmesini seccomp ile reddeder.
+# BEAM JIT (erts jit) tam olarak bunu yapar: modül kodu yazılabilir sayfaya
+# yazılır, sonra mprotect ile çalıştırılabilir yapılır. `yes` yazarsan
+# emülatör açılışta EPERM ile ölür ("Failed to reallocate memory" benzeri);
+# yani sertleştirme değil, kesinti olur. JIT'siz derlenmiş bir ERTS'te
+# (--disable-jit) `yes` yapılabilir — bu release JIT'li.
+MemoryDenyWriteExecute=no
+# Syscall filtresi bilinçli olarak YOK: BEAM'in kullandığı set (io_uring,
+# sched_setaffinity, prctl, madvise) dağıtımdan dağıtıma değişir; yanlış
+# filtre çalışma zamanında sessiz EPERM üretir. Yüzey bunun yerine
+# NoNewPrivileges + boş yetenek kümesi + salt-okunur kökle daraltıldı.
+LimitCORE=0
+LimitNOFILE=4096

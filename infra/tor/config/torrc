@@ -1,0 +1,46 @@
+# zifiri — tor yapılandırması (onion servisi). plan §11.3, §12 (onion modülü)
+#
+# Konteyner nginx'in ağ ad alanını paylaşır (network_mode: "service:nginx"),
+# bu yüzden 127.0.0.1 burada gerçekten loopback'tir: tor nginx'e TCP ile,
+# makineden çıkmadan bağlanır.
+#
+# HİÇBİR ŞEY LOG'LANMAZ: `Log notice stdout` — çıktı container'ın stdout'una
+# gider, compose `logging.driver: none` olduğu için hiçbir yere yazılmaz.
+# Dosyaya log yazma yok.
+
+# --- SOCKS (dışa çıkış) ---------------------------------------------------
+# zifiri kendisi dış çağrı yapmaz; 9050 yalnız operatör teşhisi için, loopback'e
+# kilitli. Dışarı açılmaz, publish edilmez.
+SocksPort 127.0.0.1:9050
+SocksPolicy accept 127.0.0.1
+SocksPolicy reject *
+
+# Kontrol portu KAPALI. Açık bir kontrol portu, tor'u uzaktan yönetilebilir
+# yapar ve varsayılan parola ile birlikte ciddi bir yüzey oluşturur. Imajın
+# kendi healthcheck'i bu yüzden devre dışı; compose'daki healthcheck
+# hostname dosyasına bakar.
+ControlPort 0
+
+# --- genel ----------------------------------------------------------------
+DataDirectory /var/lib/tor
+Log notice stdout
+SafeLogging 1
+# Kural: diske yazma en aza. Onion anahtarı dışında kalıcı bir şey yok.
+AvoidDiskWrites 1
+ClientUseIPv6 0
+
+# --- onion servisi (v3) ---------------------------------------------------
+HiddenServiceDir /var/lib/tor/hidden_service
+HiddenServiceVersion 3
+# Tor → nginx. Bu adres, nginx'in onion listener'ı (nginx.conf: 127.0.0.1:8081).
+HiddenServicePort 80 127.0.0.1:8081
+
+# Giriş noktası DoS savunması ve PoW. Plan §4.4'ün PoW mantığının ağ katmanı
+# karşılığı: istemci, devre kurmadan önce iş yapar.
+HiddenServiceEnableIntroDoSDefense 1
+HiddenServicePoWDefensesEnabled 1
+
+# Aynı devrede açılabilecek akış sayısı: sohbet WebSocket'i tek akış tutar,
+# paralel akış açan bir istemci tanım gereği anormaldir.
+HiddenServiceMaxStreams 10
+HiddenServiceMaxStreamsCloseCircuit 1

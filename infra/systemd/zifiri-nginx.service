@@ -1,0 +1,67 @@
+# zifiri — nginx (clearnet + onion girişi). plan §5.1, §11.3.
+#
+# Girdi: infra/nginx.conf.rendered — deploy.md'deki sed adımı $HOST ve
+# $ONION_HOST'u doldurur; şablonun kendisi çalıştırılmaz. Bu unit o dosyayı
+# /opt/zifiri/infra/nginx.conf.rendered yolundan okur (compose'daki bind
+# mount'un host karşılığı).
+#
+# HOST'A ÖZGÜ İKİ NOT (konteynerde sorun değil, host'ta evet):
+#  1) nginx.conf içindeki `user <ad>;` satırı host'ta var olan kullanıcıyı
+#     göstermeli (Debian/Ubuntu: www-data). Konteyner imajında `nginx` vardır.
+#  2) TLS anahtarı/sertifikası master tarafından okunur; 0640 ise grubu
+#     nginx'in çalıştığı kullanıcıya ver (chgrp www-data && chmod 0640).
+#
+# Master root kalır: nginx modeli bu (80/443 bağlamak ve worker'ları düşürmek
+# için). İstek verisi master'da durmaz; worker'lar `user` satırındaki
+# kullanıcıyla koşar. Root master'ı kaldırmak istersen User=www-data +
+# AmbientCapabilities=CAP_NET_BIND_SERVICE + pid yolunu /run/nginx/nginx.pid
+# yapmak gerekir; bu, render edilen config'te değişiklik ister.
+
+[Unit]
+Description=zifiri nginx (clearnet + onion)
+Documentation=file:///opt/zifiri/infra/harden.md
+After=network-online.target
+Wants=network-online.target
+# zifiri.service'e bağımlılık YOK: app kapalıyken nginx 502 döner, bu
+# onion adresinin "kapalı" görünmesinden iyidir (adres yanlış ölçeklenmesin).
+
+[Service]
+Type=simple
+# -g 'daemon off;': ön planda kal (Type=simple). Çift fork yok.
+ExecStart=/usr/sbin/nginx -c /opt/zifiri/infra/nginx.conf.rendered -g 'daemon off;'
+ExecReload=/usr/sbin/nginx -c /opt/zifiri/infra/nginx.conf.rendered -s reload
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+
+# --- sertleştirme --------------------------------------------------------
+NoNewPrivileges=yes
+# Yalnız üç yetki: 80/443 bağla, worker'ları düşür, sertifikayı oku.
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# pid /run/nginx.pid (nginx.conf) yazılabilir olmalı; /run tmpfs'tir.
+ReadWritePaths=/run
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0077
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# W^X bilinçli olarak KAPALI: nginx PCRE JIT ile derlenmişse (bazı dağıtım
+# paketleri) aynı mprotect deseni kullanılır ve `yes` açılışta EPERM verir.
+# Derlemeni biliyorsan (`nginx -V | grep pcre-jit` boşsa) `yes` yapabilirsin.
+MemoryDenyWriteExecute=no
+# İstek gövdesi bellekte; çökme dökümü diske düşmesin.
+LimitCORE=0
