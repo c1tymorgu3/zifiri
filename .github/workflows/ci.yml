@@ -1,9 +1,17 @@
 name: ci
 
+# Every job answers one question with an exit code. Nothing here asserts a claim
+# that docs/claims.md does not already carry an ID for; the `claims` job is what
+# keeps those IDs honest across claims.md, verify.md and the README.
+#
+# `workflow_dispatch` exists so a claim can be re-proved on demand
+# (`gh workflow run ci.yml --repo c1tymorgu3/zifiri`) without an empty commit.
+
 on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 # Least privilege: nothing in this workflow writes to the repository.
 permissions:
@@ -16,9 +24,11 @@ concurrency:
 
 env:
   MIX_ENV: test
-  OTP_VERSION: "27"
-  ELIXIR_VERSION: "1.18"
-  NODE_VERSION: "22"
+  # Pinned to .tool-versions. mix.exs allows `~> 1.18`; 1.18.4 is the floor and
+  # what the workstation pins, so CI tests the version the docs quote.
+  OTP_VERSION: "27.2"
+  ELIXIR_VERSION: "1.18.4"
+  NODE_VERSION: "22.14.0"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -27,7 +37,7 @@ jobs:
   elixir:
     name: elixir (otp 27, 1.18)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +46,11 @@ jobs:
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      - name: print the toolchain
+        run: |
+          elixir --version
+          mix --version
 
       # `deps` and `_build` are the whole cost of a cold run. The key is the
       # lock file, so any dependency change invalidates it; the OTP/Elixir
@@ -60,8 +75,18 @@ jobs:
       - name: format
         run: mix format --check-formatted
 
+      # `--force` matters as much as `--warnings-as-errors`: a restored `_build`
+      # holds artifacts from an earlier compile, so without it a warning that
+      # appeared in a run that then failed would never be printed again. Force
+      # recompiles this project only — deps stay cached — for ~10 s.
+      #
+      # Why fail on warnings at all: an unused variable or an unreachable clause
+      # in this codebase is usually a claim that quietly stopped being true (a
+      # redaction branch nobody calls, a match that can no longer fail). A
+      # warning is the compiler saying the code no longer does what its comment
+      # says.
       - name: compile
-        run: mix compile --warnings-as-errors
+        run: mix compile --force --warnings-as-errors
 
       - name: test
         # The SQLite file lives under `_build` (config/config.exs), so it is
@@ -79,7 +104,7 @@ jobs:
   client:
     name: client (node 22)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: client
@@ -114,7 +139,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Architecture: the invariants that are cheaper to grep than to test.
   # Separate job so a grep failure names itself instead of hiding inside a
-  # 254-test run.
+  # 383-test run.
   # ---------------------------------------------------------------------------
   architecture:
     name: architecture greps
@@ -124,10 +149,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Plan §5.1 / §11.2: nothing in `lib/` may call a logger at a level the
-      # filter only *hides*. `Logger.info/2` and friends are the request log
-      # nobody remembers writing; `IO.inspect` and `dbg/2` are the same leak
+      # Plan §5.1 / §11.2: the request log nobody remembers writing. `Logger.info`
+      # and `Logger.debug` are the sink; `IO.inspect` and `dbg(` are the same leak
       # with a shorter name (F-26).
+      #
+      # `Logger.error` is deliberately *not* in the list: lib/zifiri/mailbox/sweeper.ex
+      # is allowed to report a crash, and it reports through a message built by
+      # lib/zifiri/log_filter.ex, which strips the payload to a class name. The
+      # boundary is the filter, not the level — so the grep targets the levels that
+      # bypass it.
+      #
+      # The token list is not free to drift: test/architecture_test.exs reads this
+      # file and fails `mix test` if any of these tokens disappears from it. That
+      # test is why the four tokens are written out literally instead of as a
+      # `Logger\.(info|debug)` group.
       - name: no application logging in lib
         run: |
           set -euo pipefail
@@ -138,7 +173,7 @@ jobs:
             printf '%s\n' "$hits"
             exit 1
           fi
-          echo "clean: no Logger.info/debug, IO.inspect or dbg in lib/"
+          echo "clean: no Logger.info, Logger.debug, IO.inspect or dbg( in lib/"
 
       # Plan §5.1: application code must not read peer data. The only file
       # permitted to mention it is exactly lib/zifiri/transport.ex (anchored
@@ -169,13 +204,41 @@ jobs:
           fi
           echo "clean: Ecto logging disabled"
 
+      # C-11: the proxy is where an access record would be born. The config must
+      # say `access_log off` and send errors to /dev/null. The second grep is
+      # anchored past the keyword so that `off` is the only accepted value.
+      - name: nginx writes no access log
+        run: |
+          set -euo pipefail
+          grep -qE '^[[:space:]]*access_log[[:space:]]+off;' infra/nginx.conf
+          if grep -nE '^[[:space:]]*access_log[[:space:]]+[^o[:space:]]' infra/nginx.conf; then
+            echo "::error::nginx points access_log at a file (C-11)"
+            exit 1
+          fi
+          grep -qE '^[[:space:]]*error_log[[:space:]]+/dev/null' infra/nginx.conf
+          echo "clean: access_log off, error_log /dev/null"
+
+      # C-13: a container that can write its own root can write a log, a cache,
+      # or a core dump. Neither service may run as root or with a writable root.
+      - name: container runs non-root with a read-only root
+        run: |
+          set -euo pipefail
+          grep -qE '^USER[[:space:]]+[0-9]+' infra/Dockerfile
+          grep -q 'read_only: true' infra/docker-compose.yml
+          grep -q 'no-new-privileges:true' infra/docker-compose.yml
+          echo "clean: numeric USER, read_only and no-new-privileges set"
+
       # A warning, never a failure: an unfinished note is a prompt for a human,
       # not a reason to block a merge. `docs/` is excluded on purpose — the
       # plans and reviews there are supposed to contain open questions.
       - name: todo/fixme report
         run: |
           set -uo pipefail
-          hits="$(grep -rnE '\b(TODO|FIXME)\b' \
+          # Only the conventional markers (`TODO:` / `TODO(` / a bare marker at
+          # end of line). The word in prose — "the contract, not a TODO." — is not
+          # an open item, and a warning that fires every run trains people to
+          # ignore warnings.
+          hits="$(grep -rnE '\b(TODO|FIXME)(:|\(|$)' \
                     lib test --include='*.ex' --include='*.exs' --include='*.heex' || true)"
           if [ -n "$hits" ]; then
             count="$(printf '%s\n' "$hits" | wc -l | tr -d ' ')"
@@ -186,66 +249,293 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Docs: the subset of docs/verify.md that can run against a bare checkout.
-  # Everything that needs docker, nginx, journalctl or a live database is
-  # skipped by name rather than silently dropped.
+  # Claims: the ID is the only stable handle on a claim. Prose changes and line
+  # numbers rot — the previous version of the docs job cited verify.md:168, and
+  # by the time verify.md was rewritten around C-01…C-49 that line was a
+  # different claim. An ID survives that; a line number does not.
   # ---------------------------------------------------------------------------
-  docs:
-    name: docs/verify.md greps
+  claims:
+    name: claims.md ↔ verify.md ↔ README
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+
+      - name: every claim ID exists in both documents, contiguously
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          def read(p):
+              return pathlib.Path(p).read_text(encoding="utf-8")
+
+          cid = re.compile(r"\bC-\d{2}\b")
+          claims_txt, verify_txt = read("docs/claims.md"), read("docs/verify.md")
+          claims, verify = set(cid.findall(claims_txt)), set(cid.findall(verify_txt))
+          errs = []
+
+          if claims != verify:
+              errs.append(
+                  "id sets differ: only in claims.md=%s only in verify.md=%s"
+                  % (sorted(claims - verify), sorted(verify - claims))
+              )
+
+          # Presence in the body is not enough: the claim has to be a table row
+          # in claims.md and a section in verify.md. An ID mentioned only in
+          # passing prose is a claim nobody wrote down.
+          rows = set(re.findall(r"^\|\s*(C-\d{2})\s*\|", claims_txt, re.M))
+          heads = set(re.findall(r"^###\s+(C-\d{2})\b", verify_txt, re.M))
+          for name, have, need in (
+              ("claims.md table rows", rows, claims),
+              ("verify.md headings", heads, verify),
+          ):
+              if have != need:
+                  errs.append("%s: missing=%s extra=%s"
+                              % (name, sorted(need - have), sorted(have - need)))
+
+          nums = sorted(int(i[2:]) for i in claims)
+          if nums != list(range(1, len(nums) + 1)):
+              errs.append("ids are not contiguous from C-01: %s" % nums)
+
+          # claims.md states its own range in prose ("`C-01` … `C-49`"). Adding
+          # C-50 without touching that sentence is how a document starts lying.
+          m = re.search(r"`(C-\d{2})`\s*…\s*`(C-\d{2})`", claims_txt)
+          if m and nums and m.group(2) != "C-%02d" % nums[-1]:
+              errs.append("claims.md says the range ends at %s but the last id is C-%02d"
+                          % (m.group(2), nums[-1]))
+
+          readme = set(cid.findall(read("README.md")))
+          if readme - claims:
+              errs.append("README cites ids that claims.md does not define: %s"
+                          % sorted(readme - claims))
+
+          print("claims=%d verify=%d rows=%d headings=%d readme=%d"
+                % (len(claims), len(verify), len(rows), len(heads), len(readme)))
+          if errs:
+              for e in errs:
+                  print("::error::" + e)
+              sys.exit(1)
+          print("ok: the same %d ids, C-01..C-%02d, in both documents"
+                % (len(claims), nums[-1]))
+          PY
+
+  # ---------------------------------------------------------------------------
+  # Docs: the subset of docs/ that can be checked against a bare checkout.
+  # Everything that needs docker, nginx, journalctl or a live database is named
+  # as out of scope instead of silently dropped.
+  # ---------------------------------------------------------------------------
+  docs:
+    name: docs — links and greps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: claims
+    steps:
+      - uses: actions/checkout@v4
+
+      # A document that links to a file the tree no longer has is worse than no
+      # document: it reads as evidence and resolves to a 404.
+      - name: every relative link resolves
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          root = pathlib.Path(".").resolve()
+          errs = []
+          for md in [root / "README.md"] + sorted((root / "docs").glob("*.md")):
+              for link in re.findall(r"\]\(([^)\s]+)\)", md.read_text(encoding="utf-8")):
+                  if link.startswith(("http://", "https://", "#", "mailto:")):
+                      continue
+                  target = link.split("#", 1)[0]
+                  if not target:
+                      continue
+                  if not (md.parent / target).resolve().exists():
+                      errs.append("%s -> %s" % (md.relative_to(root).as_posix(), link))
+          if errs:
+              for e in errs:
+                  print("::error::broken link " + e)
+              sys.exit(1)
+          print("ok: every relative link in README.md and docs/*.md resolves")
+          PY
+
+      - name: the claim documents are linked from the README
+        run: |
+          set -euo pipefail
+          for f in docs/claims.md docs/verify.md; do
+            grep -q "$f" README.md || { echo "::error::README.md does not link $f"; exit 1; }
+          done
+          echo "ok: README links the claim documents"
 
       - name: verify.md checks that need only the checkout
         run: |
           set -uo pipefail
           failed=0
 
-          # verify.md:168 — `grep -c 'log: false' config/*.exs` => >=1.
+          # C-12: the Ecto query logger stays off (verify.md §6, the
+          # `grep -c 'log: false' config/*.exs` check).
           n="$(grep -h -c 'log: false' config/*.exs | awk '{s+=$1} END {print s+0}')"
           if [ "$n" -ge 1 ]; then
-            echo "ok: verify.md:168 ecto log: false present ($n lines)"
+            echo "ok: ecto log: false present ($n lines)"
           else
-            echo "::error::verify.md:168 — no 'log: false' in config/*.exs"
+            echo "::error::no 'log: false' in config/*.exs"
             failed=1
           fi
 
-          # verify.md:236 — `grep -rn 'secure_delete' lib config | wc -l` => >=1.
+          # C-09: deleted rows are overwritten, not just unlinked.
           n="$(grep -rn 'secure_delete' lib config | wc -l | tr -d ' ')"
           if [ "$n" -ge 1 ]; then
-            echo "ok: verify.md:236 secure_delete applied in code ($n references)"
+            echo "ok: secure_delete applied in code ($n references)"
           else
-            echo "::error::verify.md:236 — secure_delete not referenced"
+            echo "::error::secure_delete not referenced"
             failed=1
           fi
 
-          # verify.md:169 — app code must not read peer data (expected 0).
-          # `$C/app` maps to the repository root here, and the search is limited
-          # to source files: lib/SHARE.md and the transport moduledoc discuss
-          # these headers in prose, which is documentation, not a read. The
-          # architecture job already proves nothing else mentions them.
+          # C-24, the docs-side copy of the architecture grep: source files only,
+          # transport exempt, expected 0.
           n="$(grep -rnE 'remote_ip|x_forwarded_for|x-forwarded-for|user_agent|user-agent' lib \
                 --include='*.ex' --include='*.heex' \
                 | grep -v '^lib/zifiri/transport\.ex:' | wc -l | tr -d ' ')"
           if [ "$n" -eq 0 ]; then
-            echo "ok: verify.md:169 no peer data outside transport (0)"
+            echo "ok: no peer data outside transport (0)"
           else
-            echo "::error::verify.md:169 — $n peer-data reference(s) outside transport"
+            echo "::error::$n peer-data reference(s) outside transport"
             failed=1
           fi
 
-          # verify.md:164 — expected 0, but the only hit is prose in the
-          # endpoint's moduledoc ("no request logger plug. `Plug.Logger` ...").
-          # A grep cannot tell a comment from a call, so this is reported, not
-          # asserted.
-          echo "info: verify.md:164 Plug.Logger references in lib/: $(grep -rn 'Plug.Logger' lib | wc -l | tr -d ' ') (moduledoc only, not asserted)"
-
-          # Named skips. Each one needs something this runner does not have.
-          echo "skip: verify.md:88, 102-105, 114, 124-125 — needs a live instance, docker volumes, journalctl or a core dump"
-          echo "skip: verify.md:154-159, 161, 163, 166, 171-177 — needs docker/nginx/ss/sqlite3 on the target host"
-          echo "skip: verify.md:172-173 — swapon and /sys/power/state describe the host kernel, not the repo"
-          echo "skip: verify.md:175, 221, 233-235 — needs the live SQLite file (\$DB)"
-          echo "skip: verify.md:168, 236 'mix test ...' halves — already covered by the elixir job"
-
+          echo "out of scope for a bare checkout: live instance, docker volumes, journalctl,"
+          echo "  core dumps, swapon, and the live SQLite file — see infra/deploy.md and"
+          echo "  scripts/drill/run-all.sh, which need the target host."
           exit "$failed"
+
+  # ---------------------------------------------------------------------------
+  # E2E. The script that drives a browser does not exist yet.
+  #
+  # `hashFiles()` cannot be used as a job-level `if:` here: job conditions are
+  # evaluated before checkout, so the workspace is empty and the function always
+  # returns "". Instead the probe is its own job — it checks out, reports whether
+  # scripts/e2e/run.sh is in the tree, and `e2e` is skipped until it is. When the
+  # script lands, e2e starts running with no edit to this file.
+  # ---------------------------------------------------------------------------
+  e2e-gate:
+    name: e2e — is there a script?
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      script: ${{ steps.probe.outputs.script }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: probe
+        run: |
+          if [ -f scripts/e2e/run.sh ]; then
+            echo "script=scripts/e2e/run.sh" >> "$GITHUB_OUTPUT"
+            echo "e2e script present: scripts/e2e/run.sh"
+          else
+            echo "script=" >> "$GITHUB_OUTPUT"
+            echo "::notice title=e2e skipped::scripts/e2e/run.sh is not in the tree yet; the e2e job stays skipped until it is."
+          fi
+
+  e2e:
+    name: e2e — chrome against a live server
+    runs-on: ubuntu-latest
+    needs: [elixir, e2e-gate]
+    if: needs.e2e-gate.outputs.script != ''
+    timeout-minutes: 25
+    env:
+      # Dev, not test: the test env holds an Ecto sandbox no external process can
+      # use, and its database lives under _build.
+      MIX_ENV: dev
+      ZIFIRI_BASE_URL: http://127.0.0.1:4000
+      E2E_SCRIPT: ${{ needs.e2e-gate.outputs.script }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up beam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      - name: set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+
+      # ubuntu-latest ships google-chrome-stable. Using the image's browser keeps
+      # a third-party action out of the supply chain for a repo that bans them in
+      # lib/; the version is printed so a failure can be tied to a Chrome build.
+      - name: chrome is present
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::no Chrome on this runner image"
+            exit 1
+          fi
+          echo "CHROME_BIN=$chrome" >> "$GITHUB_ENV"
+          echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+          "$chrome" --version
+
+      - name: deps
+        run: |
+          mix local.hex --force --if-missing
+          mix deps.get
+
+      - name: compile
+        run: mix compile --warnings-as-errors
+
+      - name: prepare the dev database
+        run: |
+          mix ecto.create --quiet 2>/dev/null || true
+          mix ecto.migrate
+
+      - name: start the server
+        run: |
+          set -euo pipefail
+          mix phx.server > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          for i in $(seq 1 60); do
+            if curl -fsS -m 2 "$ZIFIRI_BASE_URL/health" > /dev/null; then
+              echo "server answered /health after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the server did not answer /health within 60s"
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: run the e2e script
+        run: |
+          chmod +x "$E2E_SCRIPT"
+          "$E2E_SCRIPT"
+
+      - name: upload what the run produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/server.log
+            e2e/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: stop the server
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/server.pid")" 2>/dev/null || true
+          fi
+          tail -n 50 "$RUNNER_TEMP/server.log" 2>/dev/null || true
