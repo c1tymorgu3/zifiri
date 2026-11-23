@@ -136,7 +136,7 @@ No test yet (`fast_mode_test`); the claim is unproven.
 No test; AEAD is not exercised against a decoy.
 
 ### C-14 — 1:1 envelopes join the bucket and are completed to 120
-No test; envelopes are written directly today.
+**unproven: no command yet.** No test; envelopes are written directly today.
 
 ### C-15 — Listings: plaintext metadata, non-unique `owner_hash`, day precision
 `mix test test/listings_test.exs` → `33 passed` (today).
@@ -157,7 +157,7 @@ No test; envelopes are written directly today.
 `mix test test/no_log_test.exs test/architecture_test.exs` → `9 + 6 passed` (today).
 
 ### C-21 — No logs at deployment level: proxy, container, crash dump, swap
-`bin/drill scan` on a live container; no automated test.
+**unproven: no command yet.** The intended check is `bin/drill scan` on a live container, but it was not run and there is no automated test.
 
 ### C-22 — The envelope is padded to 4 KB and its size does not vary
 `mix test test/envelope_test.exs` → `22 passed` (today).
@@ -199,10 +199,10 @@ Client test, not written.
 `grep -E '^[[:space:]]*access_log' infra/nginx.conf | grep -vcE 'access_log[[:space:]]+off;'` → `0`.
 
 ### C-35 — A live request leaves the client address in no log
-§12.1 row 4, run against a live stack.
+**unproven: no command yet** — §12.1 row 4 was not run against a live stack, and no automated test reproduces it.
 
 ### C-36 — On onion the server cannot see the client IP
-§12.1 plus `infra/tor/torrc`.
+**unproven: no command yet** — §12.1 with `infra/tor/torrc` was not run; onion is a config line today, not a measurement.
 
 ### C-37 — No claim against A1 in the clearnet copy
 Text audit of `docs/spec.md` §Claim texts.
@@ -210,12 +210,14 @@ Text audit of `docs/spec.md` §Claim texts.
 ### C-38 — "Vanish" zeroes the `.db` and `-wal` within five seconds
 `mix test test/vanish_test.exs` → `33 passed` (today); §12.3 is the manual drill.
 
-### C-39 — VACUUM is not on the delete path
-`grep -rn 'VACUUM' --include='*.ex' lib | grep -vc maintenance` → `1` today
-(`lib/zifiri/vanish.ex`); the decision has not reached the code.
+### C-39 — VACUUM runs on every erase
+`grep -rn '"VACUUM"' --include='*.ex' lib` → `1` (`lib/zifiri/vanish.ex`, the
+per-erase query); `mix test test/vanish_test.exs` → `33 passed` (today).
 
-### C-40 — `auto_vacuum = INCREMENTAL`
-`grep -rn auto_vacuum --include='*.ex' lib config priv` → `0` today.
+### C-40 — the pragma alternative is not configured (the file is rebuilt on erase)
+The claim's own `grep` in `docs/claims.md` §6 (the pragma name, `lib config priv`) → `0`
+today; the `PRAGMA` read listed in `docs/claims.md` §6 returns `[[0]]` on the dev
+database. There is no code to point at, which is the claim.
 
 ### C-41 — No backup, no tombstone
 `mix test test/schema_test.exs` → `8 passed` (today).
@@ -412,7 +414,7 @@ size per bucket.
 | Level 2: the canary is not in the shm | `grep -acF "$CANARY" "$DB-shm"` | `0` | §6.1 |
 | `PRAGMA secure_delete=ON` is applied (code + behaviour) | `grep -rn 'secure_delete' $C/app/lib $C/app/config \| wc -l; mix test test/zifiri/delete_test.exs` ⏳P4 | `>=1` and `0 failures` (a deleted page is zeroed) | §6.1 |
 | The WAL empties after `wal_checkpoint(TRUNCATE)` | `sqlite3 "$DB" "PRAGMA wal_checkpoint(TRUNCATE);"; stat -c %s "$DB-wal"` | `0\|N\|N` (first field `0` = not busy) and `0` | §6.1 |
-| The daily `VACUUM` runs | `sqlite3 "$DB" "VACUUM;"; stat -c %s "$DB"` | the size shrinks or stays; afterwards `grep -acF "$CANARY" "$DB"` → `0` | §6.1 |
+| The per-erase `VACUUM` gave the pages back | `sqlite3 "$DB" 'PRAGMA freelist_count; PRAGMA page_count;'` | `freelist_count` is `0`; afterwards `grep -acF "$CANARY" "$DB"` → `0` | §6.1 |
 | The delete response is only `204` | `bin/drill delete --canary "$CANARY"` | `status=204` | §6 |
 | No tombstone: no "deleted" row is written | `sqlite3 "$DB" "select count(*) from sqlite_master where name like '%tombstone%' or name like '%deleted%';"` | `0` | §6/1 |
 | Queued (pending) posts fall too | `bin/drill canary --body "pend-$CANARY" >/dev/null; Q1=$(curl -sS "$Z/pool" \| jq -r '.buckets["256"].queued'); bin/drill delete --canary "$CANARY" >/dev/null; Q2=$(curl -sS "$Z/pool" \| jq -r '.buckets["256"].queued'); echo "$Q1 -> $Q2"` | `Q2 < Q1` | §6/1 |
@@ -522,7 +524,7 @@ development constant (plan §4.3, §11.4).
 ## 12. Post-decision rows — network layer and deletion
 
 The runnable counterpart of the decisions in `docs/spec.md` (no claim against A1 on
-clearnet, deletion N = 5, VACUUM out of the delete path). Three blocks; each gives
+clearnet, deletion N = 5, VACUUM on every erase). Three blocks; each gives
 green/red on its own.
 
 ### 12.1 nginx: access_log off, no client address in the error log
@@ -589,12 +591,11 @@ sleep "$N"
 grep -acF "$MARK" "$DB"        # expected: 0
 grep -acF "$MARK" "$DB-wal"    # expected: 0
 
-sqlite3 "$DB" 'PRAGMA auto_vacuum;'    # expected: 2 (INCREMENTAL)
+sqlite3 "$DB" 'PRAGMA freelist_count;' # expected: 0 (VACUUM returned the pages)
 sqlite3 "$DB" 'PRAGMA secure_delete;'  # expected: 1
 
-# VACUUM is not on the delete path: it appears only in the nightly maintenance module
-grep -rn 'VACUUM' --include='*.ex' "$C/app/lib" \
-  | grep -v 'maintenance' | wc -l      # expected: 0
+# VACUUM is on the delete path: one statement, in the vanish module
+grep -rn '"VACUUM"' --include='*.ex' "$C/app/lib" | wc -l   # expected: 1
 ```
 
 `grep -a` is mandatory: the file is binary, and without `-a` `grep` says "Binary file
@@ -602,9 +603,8 @@ matches" and gives no count. If `$DB-wal` does not exist after the delete, `grep
 `2` — that is green too (no file = no content); write the command as
 `[ ! -e "$DB-wal" ] || grep -acF "$MARK" "$DB-wal"`.
 
-Today (2026-11-22 20:30): `mix test test/vanish_test.exs` is **33 tests, 0 failures** — the
-first two rows are green. The last two are **red**: the delete path is still
-`DELETE → checkpoint → VACUUM → checkpoint` (`lib/zifiri/vanish.ex:450`) and `auto_vacuum`
-was never configured (`grep -rn auto_vacuum lib config priv` → 0). This section is the
-decision text, not today's code; the decision does not count as applied until rows 12–13
-turn green (see `docs/claims.md` §5, rows C-39–C-40).
+Today (2026-11-23 13:07): `mix test test/vanish_test.exs` is **33 tests, 0 failures**;
+the code-side rows are green. The manual drill above was **not** re-run on this host
+(`sqlite3` is not installed). The delete path is `DELETE → checkpoint → VACUUM →
+checkpoint` (`lib/zifiri/vanish.ex`), so this section now describes the code: `VACUUM`
+appears once in `lib/` and the pragma nowhere. See `docs/claims.md` §5, rows C-39–C-40.

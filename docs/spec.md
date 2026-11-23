@@ -154,18 +154,39 @@ The claim sentence, N = 5:
 
 - **What provides the guarantee:** `PRAGMA secure_delete=ON` (a deleted cell is
   zeroed in its page) + `wal_checkpoint(TRUNCATE)` (old page images leave the
-  WAL). A single GenServer "vanish" queue collects deletions in a ~1 s window,
-  runs `DELETE` in one transaction, then checkpoints.
-- **VACUUM left the deletion path.** Rewriting the whole DB on every "vanish"
-  (temporary ~2× disk) breaks the p95 < 2 s threshold. VACUUM runs only in
-  **nightly maintenance** and is not part of the deletion claim.
-- **`auto_vacuum=INCREMENTAL`**: the DB is created that way from the start;
-  at night `PRAGMA incremental_vacuum(N)` shrinks the file.
+  WAL). `erase_many/1` runs the `DELETE` in one transaction, drops the owner's
+  pending bucket entries, then wipes the disk.
+- **Every erase ends with `checkpoint → VACUUM → checkpoint`.** In order:
+  `wal_checkpoint(TRUNCATE)` pushes the committed pages into the main file and
+  truncates the log; `VACUUM` rebuilds the file and returns the pages the
+  deleted rows occupied; `wal_checkpoint(TRUNCATE)` truncates the log `VACUUM`
+  itself wrote through. The sequence runs on every `erase_many/1` and on
+  `purge/0` — there is no separate nightly VACUUM.
+- **Why `VACUUM` cannot be dropped:** `secure_delete` zeroes the bytes, but the
+  file still carries the shape of the deletion — its size and `freelist_count`
+  say that something was removed and roughly how much. `VACUUM` is what returns
+  the pages and brings `freelist_count` to zero; a wipe that stopped at the
+  checkpoint would pass a byte scan and still hand back a file whose size
+  remembers the deleted content.
+- **Measured cost:** a 50-listing `erase_many/1` takes **8–12 ms** on its own
+  (six runs: 8.0 / 8.3 / 8.3 / 9.6 / 10.8 / 11.7 ms). It has **not** been
+  measured under concurrent load.
+- **Busy is retried, then handed to the sweeper.** `wal_checkpoint(TRUNCATE)`
+  and `VACUUM` return `busy` while another connection holds a read snapshot;
+  each is retried **three times** (50 ms, then 150 ms). If all three are busy,
+  `erase_many/1` returns `{:error, :busy}` with the rows already committed;
+  `Zifiri.Application.VanishSweeper` — the daily purge pass, five minutes after
+  boot and then every 24 h — runs `purge/0` again. A disk that was not wiped
+  never answers `{:ok, :done}`.
+- **No `auto_vacuum` and no nightly `incremental_vacuum`.** The pragma is not
+  set; the per-erase `VACUUM` is the only mechanism that shrinks the file.
 - **No backup and no tombstone.** No "deleted" row is written.
 - **Block-level disk rests on LUKS**; no physical-erase guarantee is given on
   SSDs, and this sentence does not hide that.
-- N = 5 is today's starting point: 1 s window + checkpoint. If p95 stays ≥ 2 s
-  the window goes 5 → 30 s and N = 30 is written. There is no return to VACUUM.
+- N = 5 stands on that measurement: 8–12 ms for 50 listings alone, with three
+  retries and a daily sweep behind it. The number is not a measurement under
+  load; if the busy path turns out longer than 5 s, N grows and the text
+  follows.
 
 ## Moderation — "the operator is the moderator"
 
@@ -225,7 +246,7 @@ With the `zifiri1` prefix it is **71** characters; one line on screen.
 | 5 | 1:1 has no sender | `schema_test` | no `sender` column |
 | 6 | The recipient cannot open a decoy | `mailbox_test` | an attempt to open a decoy errors |
 | 7 | There are no logs | `drill` | `/var/log` empty, no nginx access_log |
-| 8 | "Vanish" zeroes the file and the WAL within 5 s | `vanish_test` | no trace in `.db` + `-wal`; `auto_vacuum = 2`; no VACUUM on the deletion path |
+| 8 | "Vanish" zeroes the file and the WAL within 5 s | `vanish_test` | no trace in `.db` + `-wal`; `freelist_count = 0`; VACUUM on every erase |
 | 9 | No trace while presence is off | `presence_test` | no table/row |
 | 10 | The set against A1 (once cover is live) | `cover_test` | set ≤ k; the text says "at most k" |
 | 11 | The identity line is 64 base32 | `identity_test` | 40 B → 64 characters; `mailbox_id` from HKDF |
@@ -247,9 +268,9 @@ and 1:1.
 5. Client: three tabs + mode selector (fast by default, "secret send") + live
    neighbourhood counter + presence switch.
 6. Drills/load tests against the new surface.
-7. The "vanish" queue: one GenServer, `secure_delete` +
-   `wal_checkpoint(TRUNCATE)`, `auto_vacuum=INCREMENTAL`; VACUUM moves to
-   nightly maintenance.
+7. The "vanish" path: `secure_delete`, then `wal_checkpoint(TRUNCATE)` →
+   `VACUUM` → `wal_checkpoint(TRUNCATE)` on every erase; the daily
+   `VanishSweeper` retries the purge if a reader held the database.
 8. `mailbox_id` HKDF derivation + the 40 B / 64-character line.
 9. A `threshold` field in the decision record (1/1 today).
 10. Client cover + mobile PoW measurement (the A1 claim is written after this

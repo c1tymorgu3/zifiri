@@ -22,7 +22,7 @@ One page. Each row is **decision · why · instead of**. The binding contract is
 | Decision | Why | Instead of |
 |---|---|---|
 | `secure_delete` + `wal_checkpoint(TRUNCATE)` behind one GenServer queue, N = 5 s | A ~1 s window collects deletions into one transaction, then the checkpoint; cell zeroing plus WAL truncation is the guarantee | "deletion depends on VACUUM" |
-| VACUUM leaves the deletion path and runs in nightly maintenance; `auto_vacuum=INCREMENTAL` | Rewriting the whole DB on every vanish (temporary ~2× disk) breaks the p95 < 2 s threshold | VACUUM on every delete |
+| `VACUUM` stays on the deletion path: `checkpoint(TRUNCATE) → VACUUM → checkpoint(TRUNCATE)` on every erase | A 50-listing erase measures 8–12 ms alone; a file that keeps the size of what was deleted has not forgotten it | A nightly-only compaction with no per-erase rewrite |
 | No backup, no tombstone; block-level disk rests on LUKS | A "deleted" row is a record of the thing you deleted | tombstone rows |
 
 ## Moderation

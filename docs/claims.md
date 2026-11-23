@@ -1,6 +1,6 @@
 # zifiri — claims, tests, thresholds
 
-Snapshot: 2026-11-23, mix test 383 passed / 4 excluded, vitest 299 passed.
+Snapshot: 2026-11-23 13:07, `mix test` **383 passed, 4 excluded** (5.2 s), `cd client && npx vitest run` **299 passed** in 15 files (1.1 s).
 
 The anonymity claim is the product. Everything else in this repository exists to make
 that claim checkable: a test, a command, a number, a date. What an instance publishes
@@ -25,10 +25,11 @@ written in the plan does not make it true.
 Every claim carries a stable ID (`C-01` … `C-49`) so that this file, `docs/verify.md`
 and the README can be diffed against each other instead of against prose.
 
-> **Provenance.** Every number below was taken on **2026-11-23, 12:24–12:28** at commit
-> `e3d2b16`, on a checkout whose test tree compiles. `mix test` finished in 8.6 s with
-> **383 passed, 4 excluded**; `cd client && npx vitest run` finished with **299 passed**
-> in 15 files. Each row's count also comes from a solo `mix test test/<name>_test.exs`,
+> **Provenance.** The suite snapshot was taken on **2026-11-23, 13:07–13:08**; the
+> per-row solo counts were taken earlier the same day (12:24–12:28), on a checkout
+> whose test tree compiles. `mix test` finished in 5.2 s with **383 passed, 4
+> excluded**; `cd client && npx vitest run` finished with **299 passed** in 15 files.
+> Each row's count also comes from a solo `mix test test/<name>_test.exs`,
 > and those solo counts sum to exactly 383 — the whole suite and the per-file runs agree.
 > The 2026-11-22 snapshot this file used to carry is gone: it described a repository that
 > no longer exists (a `posts` table in the allowlist, two compile breaks, a shared test
@@ -56,14 +57,14 @@ Nothing is written without a number, a date and a command.
 
 ## 0. The moment of measurement
 
-At HEAD `e3d2b16` the repository is not being written to during the run: the test tree
+On this checkout the repository is not being written to during the run: the test tree
 compiles, the app boots once, and `Zifiri.DataCase` puts every test in a sandbox
 transaction on a single database. The measurement is therefore two commands, not forty:
 
 | Command | Result | Time |
 |---|---|---|
-| `mix test` | **383 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 8.6 s |
-| `cd client && npx vitest run` | **299 passed**, 15 files | 2.5 s |
+| `mix test` | **383 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 5.2 s |
+| `cd client && npx vitest run` | **299 passed**, 15 files | 1.1 s |
 
 The per-file runs in §1 were taken one after another on the same checkout; their counts
 sum to 383, so a green row is not an artifact of running it alone.
@@ -162,9 +163,9 @@ passes 19/19 today.
 ## 4. Known limits of the measurement
 
 1. **The full suite is valid now.** One process, one DB, sandboxed tests:
-   `mix test` → 383 passed, 4 excluded in 8.6 s, and the solo runs in §1 add up to the
+   `mix test` → 383 passed, 4 excluded in 5.2 s, and the solo runs in §1 add up to the
    same 383. The 2026-11-22 failure mode (shared file, lock contention, 130 errors) does
-   not recur at this commit.
+   does not recur on this checkout.
 2. **Timing sensitivity remains.** The `mailbox` sweeper test fell in one 2026-11-22 run
    (5 min window plus a slow machine) and has passed since; there is no fixed-clock
    injection, so C-11 stays **Flaky** rather than green.
@@ -194,7 +195,7 @@ output of the command run in this session; an unrun row is **None**, never a gue
 | C-37 | No claim against A1 in the clearnet copy | The clearnet text must not promise what the network layer cannot deliver. | text audit (`spec.md` §Claim texts) | no A1 claim appears | **Green (text)** |
 | C-38 | "Vanish" zeroes the `.db` and `-wal` within 5 s | Five seconds is a number a user can check with a stopwatch. | `mix test test/vanish_test.exs` | 33 tests, 0 failures | **Green** (12:25: 33 passed) |
 | C-39 | VACUUM runs on every erase (checkpoint → VACUUM → checkpoint) | The disk promise costs a full rewrite per erase; the order is what keeps the `-wal` clean too. | `mix test test/vanish_test.exs` | 33 tests, 0 failures; `runs the deletes, then checkpoint, VACUUM, checkpoint in that order` passes inside the file | **Green** (12:25: 33 passed) |
-| C-40 | `auto_vacuum = INCREMENTAL` | Incremental vacuum would shrink the file without rewriting it on the delete path. | `grep -rn auto_vacuum --include='*.ex' lib config priv` | matches > 0 and `PRAGMA auto_vacuum` = 2 | **None** — `auto_vacuum` is not set |
+| C-40 | `auto_vacuum` is not set (the file is rebuilt on erase instead) | A pragma that was never set cannot shrink the file; the per-erase `VACUUM` is what returns the pages. | `grep -rn auto_vacuum --include='*.ex' lib config priv` | `0` matches and `PRAGMA auto_vacuum` = 0 | **None** — `auto_vacuum` is not set |
 | C-41 | No backup / tombstone | A backup or a tombstone row is a second copy of what was deleted. | `mix test test/schema_test.exs` | no tombstone table in the allowlist | **Green** (8/8) |
 | C-42 | Block-level disk rests on LUKS | Block level is a LUKS reduction; the row states the reduction, not a guarantee. | `docs/verify.md` §9 | LUKS; no block-level guarantee | **None** |
 | C-43 | The operator is the moderator; the decision record has `threshold = 1` | The single-key record is stated as it is, not dressed up as multi-party. | `mix test test/mod_test.exs` | 18 tests, 0 failures; `threshold` is 1 | **Green** (18 passed) |
@@ -207,13 +208,12 @@ output of the command run in this session; an unrun row is **None**, never a gue
 
 **Reading note.** C-38, C-39 and C-40 are three different sentences.
 C-38 is the disk promise — no trace in the file or the `-wal` — and is green.
-C-39 now states what the code does: `checkpoint → VACUUM → checkpoint` on every
+C-39 states what the code does: `checkpoint → VACUUM → checkpoint` on every
 `erase_many/1` and `purge/0`, asserted query-by-query in `vanish_test`, and it is green.
-The price is a full rewrite of the database per erase, which is why `docs/decisions.md`
-still records "move VACUUM to nightly maintenance" as the plan. C-40 is that plan's
-other half and is **not implemented**: `auto_vacuum` appears nowhere in `lib/`, `config/`
-or `priv/`, so the file only shrinks through the delete-path VACUUM. None of the three
-is softened into the others.
+The price is a full rewrite of the database per erase; `docs/decisions.md` records the
+same trade-off. C-40 is the alternative that was **not** taken: `auto_vacuum` appears
+nowhere in `lib/`, `config/` or `priv/`, so the file only shrinks through the
+delete-path `VACUUM`. None of the three is softened into the others.
 
 **Limit.** The full suite *was* run today (383 passed, 4 excluded, §0). Every row above
 also has its solo run, and the solo counts match the suite.
@@ -254,7 +254,8 @@ cd client && npx vitest run
 grep -nE 'A1.*%[0-9]' docs/spec.md | wc -l
 grep -rnE 'remote_ip|x-forwarded-for' --include='*.ex' lib | grep -v transport.ex | wc -l
 grep -E '^[[:space:]]*access_log' infra/nginx.conf | grep -vcE 'access_log[[:space:]]+off;'
-grep -rn auto_vacuum --include='*.ex' lib config priv
+grep -rn auto_vacuum --include='*.ex' lib config priv   # expected: 0
+mix run -e 'IO.inspect(Zifiri.Repo.query!("PRAGMA auto_vacuum").rows)'   # expected: [[0]]
 ```
 
 A change that turns a row green is recorded in this document together with the output

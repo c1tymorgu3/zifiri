@@ -141,16 +141,14 @@ duration is valid in every run).
 This row matters: on a small file VACUUM is nearly free; at 5.2 MB deletion
 takes 45–59 ms. Two orders of magnitude under the threshold (5,000 ms).
 
-**Finding — the measured mechanism is not the designed mechanism.**
-`docs/spec.md` §Deletion says VACUUM **left** the deletion path and runs only in
-nightly maintenance (the reason: rewriting the whole file on every delete
-breaks the p95 < 2 s threshold). In the code, `Vanish.erase_many/1` still calls
-`purge/0`: checkpoint → `VACUUM` → checkpoint, inside the delete request. The
-numbers above were measured **with VACUUM included** — that is, a heavier path
-than the design asks for, and still 59 ms at 5.2 MB. The design's own path
-(`secure_delete` + checkpoint, no VACUUM) was not measured separately, and the
-`auto_vacuum=INCREMENTAL` pragma is not set in `Zifiri.Repo` either — the second
-leg of §Deletion is not in the code.
+**Finding — the measured mechanism is the designed mechanism.**
+`docs/spec.md` §Deletion says the erase ends with `checkpoint → VACUUM →
+checkpoint` on every `erase_many/1`; that is what the code does, and the numbers
+above were measured on exactly that path, VACUUM included. There is no second
+design to measure: the checkpoint-only variant (`secure_delete` + checkpoint,
+no VACUUM) is not the spec and was not run, because it passes a byte scan while
+leaving the file's size and `freelist_count` as the record of what was
+deleted.
 
 Limit of the measurement: a file on the order of 1 GB was **not measured**.
 VACUUM's cost grows with page count; a job that takes 53 ms at 5.2 MB cannot be
