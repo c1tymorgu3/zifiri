@@ -1,48 +1,48 @@
-# zifiri — nginx (clearnet + onion girişi). plan §5.1, §11.3.
+# zifiri — nginx (clearnet + onion entry). plan §5.1, §11.3.
 #
-# Girdi: infra/nginx.conf.rendered — deploy.md'deki sed adımı $HOST ve
-# $ONION_HOST'u doldurur; şablonun kendisi çalıştırılmaz. Bu unit o dosyayı
-# /opt/zifiri/infra/nginx.conf.rendered yolundan okur (compose'daki bind
-# mount'un host karşılığı).
+# Input: infra/nginx.conf.rendered — the sed step in deploy.md fills in $HOST and
+# $ONION_HOST; the template itself is not run. This unit reads that file from
+# the path /opt/zifiri/infra/nginx.conf.rendered (the host counterpart of the
+# compose bind mount).
 #
-# HOST'A ÖZGÜ İKİ NOT (konteynerde sorun değil, host'ta evet):
-#  1) nginx.conf içindeki `user <ad>;` satırı host'ta var olan kullanıcıyı
-#     göstermeli (Debian/Ubuntu: www-data). Konteyner imajında `nginx` vardır.
-#  2) TLS anahtarı/sertifikası master tarafından okunur; 0640 ise grubu
-#     nginx'in çalıştığı kullanıcıya ver (chgrp www-data && chmod 0640).
+# TWO HOST-SPECIFIC NOTES (not a problem in the container, but yes on the host):
+#  1) The `user <name>;` line in nginx.conf must refer to a user that exists
+#     on the host (Debian/Ubuntu: www-data). The container image has `nginx`.
+#  2) The TLS key/certificate is read by the master; if it is 0640 give its
+#     group to the user nginx runs as (chgrp www-data && chmod 0640).
 #
-# Master root kalır: nginx modeli bu (80/443 bağlamak ve worker'ları düşürmek
-# için). İstek verisi master'da durmaz; worker'lar `user` satırındaki
-# kullanıcıyla koşar. Root master'ı kaldırmak istersen User=www-data +
-# AmbientCapabilities=CAP_NET_BIND_SERVICE + pid yolunu /run/nginx/nginx.pid
-# yapmak gerekir; bu, render edilen config'te değişiklik ister.
+# The master stays root: that is nginx's model (to bind 80/443 and drop the
+# workers). Request data does not live in the master; workers run as the user
+# in the `user` line. If you want to drop the root master you need User=www-data
+# + AmbientCapabilities=CAP_NET_BIND_SERVICE + pid path /run/nginx/nginx.pid;
+# this requires a change in the rendered config.
 
 [Unit]
 Description=zifiri nginx (clearnet + onion)
 Documentation=file:///opt/zifiri/infra/harden.md
 After=network-online.target
 Wants=network-online.target
-# zifiri.service'e bağımlılık YOK: app kapalıyken nginx 502 döner, bu
-# onion adresinin "kapalı" görünmesinden iyidir (adres yanlış ölçeklenmesin).
+# NO dependency on zifiri.service: with app down nginx returns 502, which is
+# better than the onion address looking "down" (so the address isn't mis-measured).
 
 [Service]
 Type=simple
-# -g 'daemon off;': ön planda kal (Type=simple). Çift fork yok.
+# -g 'daemon off;': stay in the foreground (Type=simple). No double fork.
 ExecStart=/usr/sbin/nginx -c /opt/zifiri/infra/nginx.conf.rendered -g 'daemon off;'
 ExecReload=/usr/sbin/nginx -c /opt/zifiri/infra/nginx.conf.rendered -s reload
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=10
 
-# --- sertleştirme --------------------------------------------------------
+# --- hardening -----------------------------------------------------------
 NoNewPrivileges=yes
-# Yalnız üç yetki: 80/443 bağla, worker'ları düşür, sertifikayı oku.
+# Only three capabilities: bind 80/443, drop workers, read the certificate.
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
-# pid /run/nginx.pid (nginx.conf) yazılabilir olmalı; /run tmpfs'tir.
+# pid /run/nginx.pid (nginx.conf) must be writable; /run is tmpfs.
 ReadWritePaths=/run
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
@@ -59,9 +59,9 @@ LockPersonality=yes
 RemoveIPC=yes
 UMask=0077
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-# W^X bilinçli olarak KAPALI: nginx PCRE JIT ile derlenmişse (bazı dağıtım
-# paketleri) aynı mprotect deseni kullanılır ve `yes` açılışta EPERM verir.
-# Derlemeni biliyorsan (`nginx -V | grep pcre-jit` boşsa) `yes` yapabilirsin.
+# W^X deliberately DISABLED: if nginx is built with PCRE JIT (some distro
+# packages) it uses the same mprotect pattern and `yes` gives EPERM at startup.
+# If you know your build (`nginx -V | grep pcre-jit` is empty) you can set `yes`.
 MemoryDenyWriteExecute=no
-# İstek gövdesi bellekte; çökme dökümü diske düşmesin.
+# Request bodies are in memory; the crash dump should not land on disk.
 LimitCORE=0

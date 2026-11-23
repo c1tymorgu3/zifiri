@@ -1,4 +1,4 @@
-# Deploy artefaktları — repoya girmez, sır içerir.
+# Deploy artifacts — not committed, contains secrets.
 nginx.conf.rendered
 certs/
 acme/

@@ -1,49 +1,49 @@
-# zifiri — onion servisi (tor). plan §11.3, §5.1.
+# zifiri — onion service (tor). plan §11.3, §5.1.
 #
-# torrc repo'dadır (infra/tor/config/torrc): DataDirectory /var/lib/tor,
+# torrc lives in the repo (infra/tor/config/torrc): DataDirectory /var/lib/tor,
 # HiddenServicePort 80 → 127.0.0.1:8081 (nginx), ControlPort 0, Log notice
-# stdout. stdout journal'a gider; journald Storage=none olduğu için hiçbir
-# yere yazılmaz (harden.sh adım 5). Bu unit o zincirin son halkasıdır:
-# log dosyası açmaz, açılırsa da yazacak yer yoktur.
+# stdout. stdout goes to the journal; since journald has Storage=none nothing is
+# written anywhere (harden.sh step 5). This unit is the last link in that chain:
+# it does not open a log file, and if one is opened there is nowhere to write.
 #
-# Debian/Ubuntu: tor paketinin kullanıcısı `debian-tor`. RHEL/Alpine'de ad
-# farklıdır (toranon/tor) — User/Group satırını ona göre değiştir.
+# Debian/Ubuntu: the tor package's user is `debian-tor`. On RHEL/Alpine the
+# name differs (toranon/tor) — change the User/Group lines accordingly.
 #
-# Bu unit, tor paketinin kendi tor.service'i yerine geçer; ikisini birlikte
-# açma (aynı DataDirectory'ye iki tor). Kurulum:
+# This unit replaces the tor package's own tor.service; do not enable both
+# (two tors on the same DataDirectory). Install:
 #   sudo install -m 0644 infra/systemd/zifiri-tor.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now zifiri-tor
 
 [Unit]
-Description=zifiri onion servisi (tor, sertleştirilmiş)
+Description=zifiri onion service (tor, hardened)
 Documentation=file:///opt/zifiri/infra/harden.md
 After=network-online.target
 Wants=network-online.target
-# nginx onion listener'ı (127.0.0.1:8081) tor'dan bağımsız açılır; tor
-# düşerse clearnet tarafı çalışmaya devam eder.
+# nginx's onion listener (127.0.0.1:8081) opens independently of tor; if tor
+# goes down the clearnet side keeps working.
 
 [Service]
 Type=simple
 User=debian-tor
 Group=debian-tor
-# --RunAsDaemon 0: ön planda kal, systemd süreci takip etsin (çift fork yok).
+# --RunAsDaemon 0: stay in the foreground, let systemd track the process (no double fork).
 ExecStart=/usr/bin/tor -f /opt/zifiri/infra/tor/config/torrc --RunAsDaemon 0
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
 
-# --- sertleştirme --------------------------------------------------------
+# --- hardening -----------------------------------------------------------
 NoNewPrivileges=yes
-# Yetenek yok: tor 9050'yi loopback'te açar (>1024), ayrıcalık gerekmez.
+# No capabilities: tor opens 9050 on loopback (>1024), no privilege needed.
 CapabilityBoundingSet=
 AmbientCapabilities=
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
-# Tek yazma yolu: onion anahtarı ve tor durumu. Anahtar diske yazılır —
-# şifreleme (LUKS) olmadan bu dizin okunabilir; harden.md §LUKS.
+# The only write path: the onion key and tor state. The key is written to disk —
+# without encryption (LUKS) this directory is readable; harden.md §LUKS.
 ReadWritePaths=/var/lib/tor
 StateDirectory=tor
 StateDirectoryMode=0700
@@ -61,8 +61,8 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 RemoveIPC=yes
 UMask=0077
-# tor C ile yazılmıştır, JIT yok: W^X burada zorlanabilir.
+# tor is written in C, no JIT: W^X can be enforced here.
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-# Döküm yok: tor çökerse RAM'deki devre durumu diske düşmesin.
+# No dump: if tor crashes, the in-RAM circuit state should not reach disk.
 LimitCORE=0

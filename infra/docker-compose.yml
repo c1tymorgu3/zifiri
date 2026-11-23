@@ -1,32 +1,32 @@
-# zifiri — dağıtım. plan §5.1, §10.1, §11.3, §11.4, §12
+# zifiri — deployment. plan §5.1, §10.1, §11.3, §11.4, §12
 #
-# Üç servis: app (Phoenix, unix soket), nginx (clearnet + onion girişi),
-# tor (onion servisi). Hiçbiri log tutmaz: `logging.driver: none`.
+# Three services: app (Phoenix, unix socket), nginx (clearnet + onion entry),
+# tor (onion service). None of them keeps logs: `logging.driver: none`.
 #
-# Ortak kabuller:
-#   - kök dosya sistemi READ-ONLY; yazma yalnız tmpfs (/tmp, /run) ve
-#     tek veri volume'ü (/var/lib/zifiri) üzerinden.
-#   - UID 10001 app ve nginx için ortak (soket izni), tor kendi imajının
-#     kullanıcısıyla.
-#   - port publish yalnız nginx'te. app'in dışarı portu yoktur.
+# Shared assumptions:
+#   - root filesystem is READ-ONLY; writes only through tmpfs (/tmp, /run) and
+#     the single data volume (/var/lib/zifiri).
+#   - UID 10001 is shared by app and nginx (socket permission), tor uses its own
+#     image's user.
+#   - port publish only on nginx. app has no external port.
 
 name: zifiri
 
 services:
 
   # -------------------------------------------------------------------------
-  # Phoenix. nginx'e yalnız /run/zifiri/app.sock üzerinden bağlanır (§5.1).
+  # Phoenix. Connects to nginx only via /run/zifiri/app.sock (§5.1).
   # -------------------------------------------------------------------------
   app:
     build:
       context: ..
       dockerfile: infra/Dockerfile
       args:
-        # CI'da digest'e sabitlenir (§10.3).
+        # Pinned to a digest in CI (§10.3).
         ELIXIR_IMAGE: ${ELIXIR_IMAGE:-elixir:1.18-alpine}
         RUNTIME_IMAGE: ${RUNTIME_IMAGE:-alpine:3.21}
         NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
-        # `git log -1 --format=%ct` → iki bağımsız build aynı hash'i üretmeli.
+        # `git log -1 --format=%ct` → two independent builds must produce the same hash.
         SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:-0}
     image: zifiri-app:local
     restart: unless-stopped
@@ -36,8 +36,8 @@ services:
     stop_grace_period: 30s
 
     environment:
-      # Sır YOK. pepper dosyadan okunur, ortam değişkenine yazılmaz
-      # (env, `docker inspect` ve /proc/<pid>/environ'da görünür).
+      # NO secrets. The pepper is read from a file, never written to an environment
+      # variable (env is visible in `docker inspect` and /proc/<pid>/environ).
       ZIFIRI_SOCKET: /run/zifiri/app.sock
       ZIFIRI_PEPPER: /run/zifiri/pepper
       ZIFIRI_DB_PATH: /var/lib/zifiri/zifiri.db
@@ -52,15 +52,15 @@ services:
       TZ: UTC
 
     volumes:
-      # TEK veri volume'ü (§11.4). İçinde: zifiri.db, -wal, -shm, err.log.
+      # The SINGLE data volume (§11.4). Contains: zifiri.db, -wal, -shm, err.log.
       - zifiri-data:/var/lib/zifiri
-      # Soket dizini. nginx ile paylaşılır; veri değildir, yeniden
-      # oluşturulabilir (app açılışta soketi yeniden yaratır).
+      # Socket directory. Shared with nginx; it is not data, it can be
+      # recreated (app recreates the socket on startup).
       - zifiri-run:/run/zifiri
-      # Pepper yalnız tmpfs'te durur (§4.3, §11.4): host'ta /run altında
-      # üretilir, buraya read-only bağlanır. Dosya yoksa compose hata verir
-      # (`:?`), sessizce boş bir dizinle açılmaz.
-      - ${ZIFIRI_PEPPER_SRC:?pepper dosyası gerekli — bkz. deploy.md}:/run/zifiri/pepper:ro
+      # The pepper lives only on tmpfs (§4.3, §11.4): generated on the host under
+      # /run and mounted here read-only. If the file is missing compose fails
+      # (`:?`), it does not silently open with an empty directory.
+      - ${ZIFIRI_PEPPER_SRC:?pepper file required — see deploy.md}:/run/zifiri/pepper:ro
 
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -70,16 +70,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # Çekirdek dökümü kapalı (§5.1). Bu satır olmadan host'un `ulimit -c`
-    # ayarı konteynere miras kalır ve BEAM çökünce disk dökümü yazılabilir.
+    # Core dumps disabled (§5.1). Without this line the host's `ulimit -c`
+    # setting is inherited by the container and a disk dump could be written when BEAM crashes.
     ulimits:
       core: 0
       nofile:
         soft: 4096
         hard: 4096
 
-    # Soketin varlığı canlılık vekilidir; gerçek hazır-olma kontrolü
-    # dışarıdan yapılır (deploy.md: onion + clearnet uçtan uca).
+    # The socket's existence is the liveness proxy; the real readiness check is
+    # done externally (deploy.md: onion + clearnet end-to-end).
     healthcheck:
       test: ["CMD-SHELL", "test -S /run/zifiri/app.sock"]
       interval: 15s
@@ -94,23 +94,23 @@ services:
       - backend
 
   # -------------------------------------------------------------------------
-  # nginx. 80/443 clearnet, 127.0.0.1:8081 onion (tor ile aynı netns).
+  # nginx. 80/443 clearnet, 127.0.0.1:8081 onion (same netns as tor).
   # -------------------------------------------------------------------------
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     read_only: true
     user: "10001:10001"
-    # Resmi entrypoint betikleri /etc/nginx/conf.d yazar; read-only kökte
-    # bunları tamamen atlıyoruz.
+    # The official entrypoint scripts write to /etc/nginx/conf.d; on a read-only
+    # root we skip them entirely.
     entrypoint: ["nginx"]
     command: ["-g", "daemon off;"]
 
     depends_on:
       app:
-        # zifiri-run volume'ünün sahipliği app imajından (10001) gelir;
-        # nginx ondan önce başlarsa volume root sahipli doğar ve sokete
-        # bağlanamaz.
+        # Ownership of the zifiri-run volume comes from the app image (10001);
+        # if nginx starts before it the volume is created root-owned and it cannot
+        # connect to the socket.
         condition: service_healthy
 
     ports:
@@ -118,11 +118,11 @@ services:
       - "443:443"
 
     volumes:
-      # Şablon DEĞİL: deploy sırasında $HOST/$ONION_HOST doldurulmuş kopya.
+      # NOT a template: a copy with $HOST/$ONION_HOST filled in during deploy.
       - ./nginx.conf.rendered:/etc/nginx/nginx.conf:ro
       - ./certs:/etc/nginx/certs:ro
       - ./acme:/var/www/acme:ro
-      # Soket: read-only bağlanamaz — unix sokete connect() yazma izni ister.
+      # Socket: cannot be mounted read-only — connect() to a unix socket requires write permission.
       - zifiri-run:/run/zifiri
 
     tmpfs:
@@ -138,7 +138,7 @@ services:
     ulimits:
       core: 0
 
-    # Konteyner içinde curl/wget yok; busybox nc ile TCP bağlantı testi.
+    # No curl/wget inside the container; TCP connect test with busybox nc.
     healthcheck:
       test: ["CMD-SHELL", "nc -w 2 127.0.0.1 80 < /dev/null"]
       interval: 30s
@@ -154,9 +154,9 @@ services:
       - backend
 
   # -------------------------------------------------------------------------
-  # tor. nginx'in ağ ad alanını PAYLAŞIR: 127.0.0.1 gerçekten loopback olur,
-  # yani onion trafiği de clearnet trafiği de aynı adresten görünür ve
-  # IP bazlı limit (§4.4) anlamsız kalır — tasarım gereği.
+  # tor. SHARES nginx's network namespace: 127.0.0.1 really is loopback,
+  # so onion traffic and clearnet traffic appear from the same address and
+  # the IP-based limit (§4.4) becomes meaningless — by design.
   # -------------------------------------------------------------------------
   tor:
     image: dockurr/tor:latest
@@ -168,11 +168,11 @@ services:
         condition: service_started
 
     volumes:
-      # Tam torrc: SocksPort, HiddenServiceDir, HiddenServicePort → 127.0.0.1:8081.
-      # Dosya olarak bağlanır ki imajın /etc/tor altındaki diğer dosyaları kalsın.
+      # Full torrc: SocksPort, HiddenServiceDir, HiddenServicePort → 127.0.0.1:8081.
+      # Mounted as a single file so the image's other files under /etc/tor remain.
       - ./tor/config/torrc:/etc/tor/torrc:ro
-      # Onion v3 anahtarı. KALICIDIR ve yedeklenmezse adres değişir (§11.5).
-      # Kullanıcı verisi değildir; tek volume kuralının dışında.
+      # Onion v3 key. It is PERSISTENT and the address changes if it is not backed up (§11.5).
+      # It is not user data; outside the single-volume rule.
       - ./tor/data:/var/lib/tor
 
     tmpfs:
@@ -190,7 +190,7 @@ services:
     ulimits:
       core: 0
 
-    # hostname dosyası, hidden service yayımlandığında oluşur.
+    # The hostname file appears once the hidden service is published.
     healthcheck:
       test: ["CMD-SHELL", "test -f /var/lib/tor/hidden_service/hostname"]
       interval: 30s
@@ -203,12 +203,12 @@ services:
 
 volumes:
   zifiri-data:
-    # Tek veri volume'ü. Yedek YOK (§11.5): disk kaybı = içerik kaybı.
+    # The single data volume. NO backup (§11.5): disk loss = content loss.
   zifiri-run:
-    # Yalnız unix soket. Kalıcı olması gerekmez.
+    # Unix socket only. It does not need to be persistent.
 
 networks:
-  # app dışarı çıkamaz: internet erişimi olmayan ağ.
+  # app cannot reach the outside: network without internet access.
   backend:
     internal: true
   edge: {}

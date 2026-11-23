@@ -1,22 +1,22 @@
-# zifiri — Phoenix release. plan §5.1 (log yok), §11.4 (disk ve bellek).
+# zifiri — Phoenix release. plan §5.1 (no logs), §11.4 (disk and memory).
 #
-# Bu unit, release'i DOĞRUDAN host üzerinde çalıştırmak içindir. Varsayılan
-# dağıtım yolu docker compose'dur (infra/docker-compose.yml, infra/deploy.md);
-# aynı sertleştirme ilkeleri orada da geçerli. İkisini birlikte kullanma:
-# aynı SQLite dosyasına iki yazıcı olur.
+# This unit is for running the release DIRECTLY on the host. The default
+# deployment path is docker compose (infra/docker-compose.yml, infra/deploy.md);
+# the same hardening principles apply there too. Do not use both together:
+# two writers to the same SQLite file.
 #
-# Kurulum (bir kez):
+# Install (once):
 #   sudo useradd --system --home /var/lib/zifiri --shell /usr/sbin/nologin zifiri
 #   sudo install -d -m 0700 -o root -g root /run/zifiri-pepper
 #   sudo sh -c 'umask 077; head -c 32 /dev/urandom | base64 > /run/zifiri-pepper/pepper'
-#   sudo chmod 0400 /run/zifiri-pepper/pepper        # pepper DİSKTE durmaz, tmpfs
+#   sudo chmod 0400 /run/zifiri-pepper/pepper        # pepper does NOT live on disk, tmpfs
 #   sudo install -m 0644 infra/systemd/zifiri.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now zifiri
 #
-# Pepper: LoadCredential ile verilir. Süreç dosyayı kendi kimliğiyle değil,
-# systemd'nin bu unit için ayırdığı tmpfs kopyasından okur; kopya yalnız bu
-# unit'e görünür ve diske yazılmaz. Dosya yoksa unit AÇILMAZ (fail-fast):
-# pepper'sız bir kurulum, pepper'ı kaybetmiş kurulumla aynı sessiz hatadır.
+# Pepper: supplied via LoadCredential. The process reads the file not under its
+# own identity but from the tmpfs copy systemd allocates for this unit; the copy
+# is visible only to this unit and is not written to disk. If the file is missing
+# the unit does NOT start (fail-fast): a setup without a pepper is the same
 
 [Unit]
 Description=zifiri (Phoenix release)
@@ -30,8 +30,8 @@ User=zifiri
 Group=zifiri
 WorkingDirectory=/opt/zifiri
 ExecStart=/opt/zifiri/bin/zifiri start
-# ExecStop yok: `start` ön planda çalışır, systemd SIGTERM'i süreç grubuna
-# verir; BEAM SIGTERM'de kendi kapanışını yapar (Phoenix graceful shutdown).
+# No ExecStop: `start` runs in the foreground, systemd sends SIGTERM to the
+# process group; the BEAM shuts itself down on SIGTERM (Phoenix graceful shutdown).
 KillSignal=SIGTERM
 KillMode=mixed
 TimeoutStartSec=60
@@ -39,9 +39,9 @@ TimeoutStopSec=30
 Restart=on-failure
 RestartSec=2
 
-# --- ortam ---------------------------------------------------------------
-# Yollar runtime.exs varsayılanlarıyla aynı; burada AÇIKÇA yazılı ki unit
-# tek başına okununca nereye yazıldığı belli olsun.
+# --- environment ---------------------------------------------------------
+# Paths match runtime.exs defaults; written EXPLICITLY here so that reading the
+# unit standalone makes clear where it writes.
 Environment=ZIFIRI_DB_PATH=/var/lib/zifiri/zifiri.db
 Environment=ZIFIRI_ERR_LOG=/var/lib/zifiri/err.log
 Environment=ZIFIRI_SOCKET=/run/zifiri/http.sock
@@ -49,13 +49,13 @@ Environment=ZIFIRI_PEPPER=%d/pepper
 Environment=HOME=/var/lib/zifiri
 Environment=LANG=C.UTF-8
 Environment=TZ=UTC
-# Dağıtık Erlang/EPMD yok: tek düğüm, dinleyen daemon yok (yüzey kapatma).
+# No distributed Erlang/EPMD: single node, no listening daemon (surface reduction).
 Environment=RELEASE_DISTRIBUTION=none
-# Release betiği pid dosyasını $RELEASE_TMP altına yazar; varsayılan
-# /opt/zifiri/tmp, ProtectSystem=strict ile SALT-OKUNUR olurdu. /run/zifiri
-# hem yazılabilir hem tmpfs (pid diske düşmez).
+# The release script writes the pid file under $RELEASE_TMP; the default
+# /opt/zifiri/tmp would be READ-ONLY with ProtectSystem=strict. /run/zifiri
+# is both writable and tmpfs (the pid does not land on disk).
 Environment=RELEASE_TMP=/run/zifiri
-# Erlang kendi çökme dökümünü de yazmasın: /dev/null + 0 saniye bekleme.
+# Stop Erlang from writing its own crash dump too: /dev/null + 0 seconds wait.
 Environment=ERL_CRASH_DUMP=/dev/null
 Environment=ERL_CRASH_DUMP_SECONDS=0
 LoadCredential=pepper:/run/zifiri-pepper/pepper
@@ -65,13 +65,13 @@ RuntimeDirectoryMode=0750
 StateDirectory=zifiri
 StateDirectoryMode=0700
 
-# --- sertleştirme --------------------------------------------------------
-# Hiçbir yeni yetki yok: setuid ikili, dosya yeteneği, polkit — hiçbiri
-# süreçten yükselemez.
+# --- hardening -----------------------------------------------------------
+# No new privileges at all: setuid binary, file capability, polkit — none can
+# be raised from the process.
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
-# Kök dosya sistemi salt-okunur; yazma yalnız aşağıdaki iki yol + tmpfs.
+# Root filesystem read-only; writes only to the two paths below + tmpfs.
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
@@ -91,23 +91,23 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 RemoveIPC=yes
 UMask=0077
-# Uygulama dış çağrı yapmaz (§11.3): AF_UNIX yeter. INET/INET6 bilinçli
-# olarak açık bırakıldı — bir kütüphane (DNS, telemetri) sessizce inet
-# açmaya kalkarsa çökmesin; yüzeyi daraltmak istersen yalnız AF_UNIX yaz
-# ve bir hafta boyunca çalışma zamanı hatası olmadığını doğrula.
+# The application makes no outbound calls (§11.3): AF_UNIX is enough. INET/INET6
+# are deliberately left open — so that if a library (DNS, telemetry) silently
+# tries to open inet it doesn't crash; if you want to narrow the surface write
+# only AF_UNIX and verify for a week that there are no runtime errors.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-# --- BEAM JIT: W^X ZORLANAMAZ -------------------------------------------
-# MemoryDenyWriteExecute=yes, mmap/mprotect üzerinden PROT_WRITE|PROT_EXEC
-# ve yazılabilir sayfaya sonradan PROT_EXEC verilmesini seccomp ile reddeder.
-# BEAM JIT (erts jit) tam olarak bunu yapar: modül kodu yazılabilir sayfaya
-# yazılır, sonra mprotect ile çalıştırılabilir yapılır. `yes` yazarsan
-# emülatör açılışta EPERM ile ölür ("Failed to reallocate memory" benzeri);
-# yani sertleştirme değil, kesinti olur. JIT'siz derlenmiş bir ERTS'te
-# (--disable-jit) `yes` yapılabilir — bu release JIT'li.
+# --- BEAM JIT: W^X CANNOT BE ENFORCED ------------------------------------
+# MemoryDenyWriteExecute=yes rejects, via seccomp, PROT_WRITE|PROT_EXEC over
+# mmap/mprotect and granting PROT_EXEC to a writable page afterwards.
+# The BEAM JIT (erts jit) does exactly this: module code is written to a
+# writable page, then made executable with mprotect. If you set `yes` the
+# emulator dies at startup with EPERM (something like "Failed to reallocate
+# memory"); i.e. not hardening, but an outage. On an ERTS built without JIT
+# (--disable-jit) `yes` is possible — this release has JIT.
 MemoryDenyWriteExecute=no
-# Syscall filtresi bilinçli olarak YOK: BEAM'in kullandığı set (io_uring,
-# sched_setaffinity, prctl, madvise) dağıtımdan dağıtıma değişir; yanlış
-# filtre çalışma zamanında sessiz EPERM üretir. Yüzey bunun yerine
-# NoNewPrivileges + boş yetenek kümesi + salt-okunur kökle daraltıldı.
+# Syscall filter deliberately ABSENT: the set the BEAM uses (io_uring,
+# sched_setaffinity, prctl, madvise) varies from release to release; a wrong
+# filter produces silent EPERM at runtime. The surface is narrowed instead by
+# NoNewPrivileges + empty capability set + read-only root.
 LimitCORE=0
 LimitNOFILE=4096

@@ -1,46 +1,46 @@
-# zifiri — tor yapılandırması (onion servisi). plan §11.3, §12 (onion modülü)
+# zifiri — tor configuration (onion service). plan §11.3, §12 (onion module)
 #
-# Konteyner nginx'in ağ ad alanını paylaşır (network_mode: "service:nginx"),
-# bu yüzden 127.0.0.1 burada gerçekten loopback'tir: tor nginx'e TCP ile,
-# makineden çıkmadan bağlanır.
+# The container shares nginx's network namespace (network_mode: "service:nginx"),
+# so 127.0.0.1 here really is loopback: tor connects to nginx over TCP
+# without leaving the machine.
 #
-# HİÇBİR ŞEY LOG'LANMAZ: `Log notice stdout` — çıktı container'ın stdout'una
-# gider, compose `logging.driver: none` olduğu için hiçbir yere yazılmaz.
-# Dosyaya log yazma yok.
+# NOTHING IS LOGGED: `Log notice stdout` — output goes to the container's stdout,
+# and since compose uses `logging.driver: none` it is written nowhere.
+# No logging to a file.
 
-# --- SOCKS (dışa çıkış) ---------------------------------------------------
-# zifiri kendisi dış çağrı yapmaz; 9050 yalnız operatör teşhisi için, loopback'e
-# kilitli. Dışarı açılmaz, publish edilmez.
+# --- SOCKS (outbound) -----------------------------------------------------
+# zifiri itself makes no outbound calls; 9050 is only for operator diagnostics,
+# locked to loopback. Not exposed externally, not published.
 SocksPort 127.0.0.1:9050
 SocksPolicy accept 127.0.0.1
 SocksPolicy reject *
 
-# Kontrol portu KAPALI. Açık bir kontrol portu, tor'u uzaktan yönetilebilir
-# yapar ve varsayılan parola ile birlikte ciddi bir yüzey oluşturur. Imajın
-# kendi healthcheck'i bu yüzden devre dışı; compose'daki healthcheck
-# hostname dosyasına bakar.
+# The control port is CLOSED. An open control port makes tor remotely
+# manageable and, with a default password, forms a serious surface. The image's
+# own healthcheck is therefore disabled; the healthcheck in compose
+# looks at the hostname file.
 ControlPort 0
 
-# --- genel ----------------------------------------------------------------
+# --- general --------------------------------------------------------------
 DataDirectory /var/lib/tor
 Log notice stdout
 SafeLogging 1
-# Kural: diske yazma en aza. Onion anahtarı dışında kalıcı bir şey yok.
+# Rule: minimize disk writes. Nothing persistent except the onion key.
 AvoidDiskWrites 1
 ClientUseIPv6 0
 
-# --- onion servisi (v3) ---------------------------------------------------
+# --- onion service (v3) ---------------------------------------------------
 HiddenServiceDir /var/lib/tor/hidden_service
 HiddenServiceVersion 3
-# Tor → nginx. Bu adres, nginx'in onion listener'ı (nginx.conf: 127.0.0.1:8081).
+# Tor → nginx. This address is nginx's onion listener (nginx.conf: 127.0.0.1:8081).
 HiddenServicePort 80 127.0.0.1:8081
 
-# Giriş noktası DoS savunması ve PoW. Plan §4.4'ün PoW mantığının ağ katmanı
-# karşılığı: istemci, devre kurmadan önce iş yapar.
+# Intro-point DoS defense and PoW. The network-layer counterpart of the PoW
+# logic in plan §4.4: the client does work before building a circuit.
 HiddenServiceEnableIntroDoSDefense 1
 HiddenServicePoWDefensesEnabled 1
 
-# Aynı devrede açılabilecek akış sayısı: sohbet WebSocket'i tek akış tutar,
-# paralel akış açan bir istemci tanım gereği anormaldir.
+# Number of streams that can be opened in the same circuit: the chat WebSocket
+# holds a single stream; a client opening parallel streams is abnormal by definition.
 HiddenServiceMaxStreams 10
 HiddenServiceMaxStreamsCloseCircuit 1
