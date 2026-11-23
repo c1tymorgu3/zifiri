@@ -1,6 +1,6 @@
 # zifiri — claims, tests, thresholds
 
-Snapshot: 2026-11-23, e3d2b16faa4d, mix test 383 passed / 4 excluded, vitest 299 passed.
+Snapshot: 2026-11-23, mix test 383 passed / 4 excluded, vitest 299 passed.
 
 The anonymity claim is the product. Everything else in this repository exists to make
 that claim checkable: a test, a command, a number, a date. What an instance publishes
@@ -13,9 +13,9 @@ inside a ten-minute bucket, a **4096 B** envelope that never varies, a **71-char
 identity line that carries no public key. A row below is either inside that model or
 explicitly outside it; the rows outside it are named, not softened.
 
-Every claim below comes from the contract in `docs/spec.md`; the `§` numbers in the
-tables are the plan's. The plan text is not published in this repository — it stays
-readable in git history (commit `6d9552c`, `docs/arsiv/plan.md`) — and `docs/spec.md` is
+Every claim below comes from the contract in `docs/spec.md`. The `§` numbers in the
+tables are the plan's section numbers; the plan itself is not in this repository and not in
+its history. `docs/spec.md` is
 the contract in force. This document holds the test, the threshold, why the claim is
 load-bearing, and the **current** status of each one. If a
 row says "green", the claim was run with the listed command and passed; "red" means it
