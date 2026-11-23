@@ -54,7 +54,7 @@ defmodule Zifiri.Endpoint do
     at: "/",
     from: "priv/static",
     gzip: false,
-    only: ~w(assets index.html logo.png robots.txt)
+    only: ~w(assets index.html logo.png favicon-32.png apple-touch-icon.png robots.txt)
 
   plug Plug.Telemetry, event_prefix: [:zifiri, :endpoint]
   plug :api_json_body
