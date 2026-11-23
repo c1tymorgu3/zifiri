@@ -81,8 +81,9 @@ Chat has no single right answer: some want to speak at once, some want not to
 be seen. The product stands on its first 20 users; a chat that waits 10 minutes
 is not a chat. So **the default is fast mode**.
 
-- **Fast (default):** the message goes immediately, with a 1/5 neighbourhood of
-  cover. Latency < 1 s. Warning text: "your moment of writing is ~80% hidden".
+- **Fast (default):** the message goes out at once. There is no cover pool: the
+  anonymity you have is the number of writes in the last sixty seconds, and the
+  button prints it. Latency < 1 s. Warning text: "fast send · anonymity right now: N".
 - **Secret send:** the name of silent mode in the interface. The message enters
   the 10-minute bucket, the bucket is filled to 120 with decoys, shuffled and
   published. Latency ≤ 10 min. Warning: "your moment of writing is ~99%

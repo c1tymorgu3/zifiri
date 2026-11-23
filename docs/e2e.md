@@ -83,7 +83,7 @@ placeholder's absence proves the module executed.
 
 | Check | How |
 | --- | --- |
-| demo badge | `data-demo="true"` **and** the literal text `örnek veri` |
+| demo badge | `data-demo="true"` **and** the literal text `sample data` |
 | rooms not empty | `class="zf-room"` count > 0 **and** the room `mahalle` present |
 | listings not empty | `class="listing"` count > 0 |
 
@@ -216,6 +216,6 @@ after the server starts:
 - **`:inets` is broken on this toolchain.** `:httpc` raises
   `:http_util.timestamp/0 is undefined` even though the beam file is on disk.
   Use `:gen_tcp`, or fix the OTP install before blaming the test.
-- **One surface at a time.** Any DOM assertion about Mesajlar or İlanlar must
+- **One surface at a time.** Any DOM assertion about Messages or Listings must
   load the page with `?surface=messages` / `?surface=listings`; the other
   surfaces' hosts are detached, so `--dump-dom` cannot see them.

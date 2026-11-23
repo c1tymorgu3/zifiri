@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# zifiri — host sertleştirme. plan §5.1 (log yok), §11.4 (disk ve bellek).
+# zifiri — host hardening. plan §5.1 (no logs), §11.4 (disk and memory).
 #
-# NE YAPAR
-#   swap'i kapatır · çekirdek dökümünü üç katmanda keser · journald'ı diske
-#   yazmaz hâle getirir · /var/log'taki eski kayıtları siler.
-#   Her adım IDEMPOTENT: ikinci çalıştırma aynı durumu üretir, hata vermez.
+# WHAT IT DOES
+#   turns swap off · cuts core dumps at three layers · makes journald stop
+#   writing to disk · deletes old records under /var/log.
+#   Every step is IDEMPOTENT: a second run produces the same state, no error.
 #
-# NE YAPMAZ
-#   LUKS kurmaz (kurulum anında yapılmalı — harden.md §"LUKS"), sağlayıcı
-#   loglarını, ağ gözlemini veya RAM'deki veriyi engellemez. Bu sınırlar
-#   harden.md'de tek tek yazılı; betiğin yeşil dönmesi "anonim" demek değildir.
+# WHAT IT DOES NOT DO
+#   It does not set up LUKS (that has to happen at install time — harden.md
+#   §"LUKS"), and it does not block provider logs, network observation or data
+#   in RAM. Those limits are written out one by one in harden.md; a green script
+#   does not mean "anonymous".
 #
-# KULLANIM
-#   sudo ./harden.sh                    # uygula (root)
-#   ./harden.sh --dry-run               # planı yazdır, hiçbir şeyi değiştirme
-#   sudo ./harden.sh --log-age-days 3   # /var/log eşiği (varsayılan 7 gün)
+# USAGE
+#   sudo ./harden.sh                    # apply (root)
+#   ./harden.sh --dry-run               # print the plan, change nothing
+#   sudo ./harden.sh --log-age-days 3   # /var/log threshold (default 7 days)
 #
-# ÇIKIŞ KODLARI
-#   0 başarılı · 1 hata (root değil, geçersiz argüman) · 2 Linux değil.
+# EXIT CODES
+#   0 success · 1 error (not root, invalid argument) · 2 not Linux.
 #
-# Geri alma: her adımın altında tek satır yazıyor; toplu geri alma harden.md'de.
+# Rollback: each step prints its one-line rollback underneath; batch rollback
+# is in harden.md.
 
 set -euo pipefail
 
@@ -30,30 +32,32 @@ LOG_AGE_DAYS=7
 
 SYSCTL_FILE=/etc/sysctl.d/90-zifiri-hardening.conf
 LIMITS_FILE=/etc/security/limits.conf
-LIMITS_BEGIN='# BEGIN zifiri-harden (core dump kapalı)'
-LIMITS_END='# END zifiri-harden (core dump kapalı)'
+LIMITS_BEGIN='# BEGIN zifiri-harden (core dumps off)'
+LIMITS_END='# END zifiri-harden (core dumps off)'
 LIMITS_DROPIN=/etc/systemd/system.conf.d/90-zifiri-core.conf
 JOURNALD_DROPIN=/etc/systemd/journald.conf.d/90-zifiri.conf
 FSTAB_BACKUP=/etc/fstab.zifiri.bak
-# Tek yerde durur: hem uygulanan komut hem dry-run çıktısı aynı metni gösterir.
-FSTAB_SED='s|^([^#].*[[:space:]]swap[[:space:]].*)$|# zifiri: swap kapalı — \1|'
+# Kept in one place: both the command that is applied and the dry-run output
+# show the same text.
+FSTAB_SED='s|^([^#].*[[:space:]]swap[[:space:]].*)$|# zifiri: swap off — \1|'
 
 # ---------------------------------------------------------------------------
-# yardımcılar
+# helpers
 # ---------------------------------------------------------------------------
 
 say()  { printf '%s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*" >&2; }
 step() { printf '\n=== %s ===\n' "$*"; }
-rollback() { printf '  geri alma: %s\n' "$*"; }
+rollback() { printf '  rollback: %s\n' "$*"; }
 would() { printf '  [dry-run] %s\n' "$*"; }
 
 is_linux() {
   [ "$(uname -s 2>/dev/null || echo unknown)" = Linux ] && [ -d /proc/sys/kernel ]
 }
 
-# Komutu çalıştır; dry-run'da yalnız yazdır. Redirection gerektiren işler
-# buradan geçmez — onlar install_content/find gibi kendi dry-run dalını taşır.
+# Run the command; under dry-run only print it. Work that needs a redirection
+# does not go through here — those carry their own dry-run branch, like
+# install_content/find.
 do_cmd() {
   if (( DRY_RUN )); then
     would "$*"
@@ -62,12 +66,13 @@ do_cmd() {
   fi
 }
 
-# İçeriği yalnız değiştiyse yaz (idempotentlik burada). install -D dizini kurar.
+# Write the content only if it changed (idempotency lives here). install -D
+# creates the directory.
 install_content() {
   local path=$1 content=$2 mode=${3:-0644} tmp
 
   if (( DRY_RUN )); then
-    would "yazılacak: $path (mode $mode)"
+    would "would write: $path (mode $mode)"
     printf '%s\n' "$content" | sed 's/^/      | /'
     return 0
   fi
@@ -75,31 +80,31 @@ install_content() {
   tmp=$(mktemp)
   printf '%s\n' "$content" >"$tmp"
   if [ -f "$path" ] && cmp -s "$tmp" "$path"; then
-    say "  değişiklik yok: $path"
+    say "  no change: $path"
     rm -f "$tmp"
     return 0
   fi
   install -D -m "$mode" "$tmp" "$path"
   rm -f "$tmp"
-  say "  yazıldı: $path"
+  say "  written: $path"
 }
 
 usage() {
   cat <<EOF
-$PROG — zifiri host sertleştirme (plan §5.1, §11.4)
+$PROG — zifiri host hardening (plan §5.1, §11.4)
 
   sudo $PROG [--dry-run] [--log-age-days N]
 
-  --dry-run            Hiçbir şeyi değiştirme; her adımın komutunu ve
-                       geri alma satırını yazdır.
-  --log-age-days N     /var/log altında N günden eski *.log dosyalarını sil
-                       (varsayılan: 7).
-  -h, --help           Bu metin.
+  --dry-run            Change nothing; print the command and the rollback
+                       line of every step.
+  --log-age-days N     Delete *.log files under /var/log older than N days
+                       (default: 7).
+  -h, --help           This text.
 
-Adımlar: swap kapat · core dump kapat (sysctl + limits + coredump.socket) ·
-journald Storage=none · /var/log temizliği · doğrulama.
+Steps: swap off · core dump off (sysctl + limits + coredump.socket) ·
+journald Storage=none · /var/log cleanup · verification.
 
-LUKS bu betiğin işi DEĞİLDİR: şifreleme kurulum anında yapılır (harden.md).
+LUKS is NOT this script's job: encryption happens at install time (harden.md).
 EOF
 }
 
@@ -108,20 +113,20 @@ EOF
 # ---------------------------------------------------------------------------
 
 step_swap() {
-  step "2/7 swap kapat"
-  say "  Ne yapar: açık swap alanlarını kapatır, /etc/fstab'taki swap satırlarını"
-  say "            yorumlar, swap/hibernate hedeflerini maskeler."
-  say "  Neden: swap, RAM'in diske yazılmış hâlidir. Mesaj metni, oturum"
-  say "            anahtarı ya da pepper oraya düşerse 'diske yazılmaz' (§7.1)"
-  say "            iddiası çöker. Hibernate aynı şeyi tüm RAM için yapar."
+  step "2/7 swap off"
+  say "  What it does: turns off the active swap areas, comments out the swap"
+  say "               lines in /etc/fstab, masks the swap/hibernate targets."
+  say "  Why: swap is RAM written to disk. If a message body, a session key or"
+  say "       the pepper lands there, the \"not written to disk\" (§7.1) claim"
+  say "       collapses. Hibernate does the same for all of RAM."
   rollback "sudo cp -a $FSTAB_BACKUP /etc/fstab && sudo swapon -a && sudo systemctl unmask swap.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target"
 
   if is_linux; then
     local n
     n=$(swapon --show --noheadings 2>/dev/null | wc -l | tr -d ' ')
-    say "  mevcut: $n açık swap alanı"
+    say "  current: $n active swap areas"
   else
-    say "  mevcut: okunamadı (Linux değil)"
+    say "  current: unreadable (not Linux)"
   fi
 
   do_cmd swapoff -a
@@ -129,54 +134,55 @@ step_swap() {
   if ! is_linux; then
     would "sed -i -E '$FSTAB_SED' /etc/fstab"
   elif [ -f /etc/fstab ]; then
-    # Yedek her durumda bir kez alınır: geri alma komutu dosyayı gösteriyor,
-    # yoksa komut yalan söylemiş olur.
+    # The backup is taken once, in every case: the rollback command points at
+    # the file, and without it the command would be lying.
     if [ ! -e "$FSTAB_BACKUP" ]; then
       do_cmd cp -a /etc/fstab "$FSTAB_BACKUP"
     fi
     if grep -Eq '^[[:space:]]*[^#[:space:]].*[[:space:]]swap[[:space:]]' /etc/fstab; then
-      # Yorumlanan satır geri alınabilir kalsın: özgün metin satır sonunda.
+      # Keep the commented line reversible: the original text stays at the end.
       do_cmd sed -i -E "$FSTAB_SED" /etc/fstab
     else
-      say "  /etc/fstab: yorumlanacak swap satırı yok (idempotent)"
+      say "  /etc/fstab: no swap line to comment out (idempotent)"
     fi
   fi
 
-  # Maskeleme, birinin sonradan 'swapon -a' ya da 'systemctl hibernate'
-  # demesini engeller. Hata (birim yok) yutulur: eksik olması sorun değil.
+  # Masking stops someone from later saying 'swapon -a' or 'systemctl
+  # hibernate'. The error (no such unit) is swallowed: being absent is fine.
   do_cmd systemctl mask swap.target 2>/dev/null || true
   do_cmd systemctl mask hibernate.target hybrid-sleep.target suspend-then-hibernate.target 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
-# 2. çekirdek dökümü (sysctl)
+# 2. core dump (sysctl)
 # ---------------------------------------------------------------------------
 
 step_sysctl() {
-  step "3/7 çekirdek dökümü — sysctl"
-  say "  Ne yapar: core_pattern'i çöpe borular, setuid dökümünü ve dmesg"
-  say "            okumasını kapatır, swappiness'i sıfırlar."
-  say "  Neden: BOŞ core_pattern işe yaramaz — boş bırakmak 'core' adında"
-  say "            dosyayı çalışma dizinine yazar. Kapatmanın yolu |/bin/false."
-  say "            dmesg_restrict: çekirdek halkası süreç adı/adres taşır."
+  step "3/7 core dump — sysctl"
+  say "  What it does: pipes core_pattern into the void, turns off the setuid"
+  say "                dump and dmesg reads, zeroes swappiness."
+  say "  Why: an EMPTY core_pattern does not help — leaving it empty writes a"
+  say "       file named 'core' into the working directory. The way to close it"
+  say "       is |/bin/false. dmesg_restrict: the kernel ring carries process"
+  say "       names and addresses."
   rollback "sudo rm -f $SYSCTL_FILE && sudo sysctl --system"
 
   local content
   content=$(cat <<'EOF'
-# zifiri — plan §5.1. YÖNETİLEN DOSYA: infra/harden.sh yazar.
-# Elle düzenleme bir sonraki çalıştırmada ezilir; değişiklik betiğe girer.
+# zifiri — plan §5.1. MANAGED FILE: written by infra/harden.sh.
+# A manual edit is overwritten on the next run; the change goes into the script.
 
-# Çekirdek dökümü hiçbir süreç için yazılmaz (boru → /bin/false).
+# No core dump is written for any process (pipe → /bin/false).
 kernel.core_pattern = |/bin/false
 kernel.core_uses_pid = 0
-# setuid süreçler de döküm yazamaz (sudo ile çalışan bir çökme RAM'i diske taşır).
+# setuid processes cannot dump either (a crash under sudo moves RAM to disk).
 fs.suid_dumpable = 0
-# Çekirdek halkası ve sembol adresleri root dışına kapalı.
+# The kernel ring and symbol addresses are closed to non-root.
 kernel.dmesg_restrict = 1
 kernel.kptr_restrict = 2
-# Swap kapalıyken etkisiz; açılırsa bile agresif takas yapılmasın.
+# Ineffective while swap is off; if it is ever turned on, no aggressive paging.
 vm.swappiness = 0
-# "Martian" paketler kaynak adresiyle loglanır — istemci IP sızıntısı (§5.1).
+# "Martian" packets are logged with their source address — client IP leak (§5.1).
 net.ipv4.conf.all.log_martians = 0
 net.ipv4.conf.default.log_martians = 0
 EOF
@@ -184,7 +190,8 @@ EOF
   install_content "$SYSCTL_FILE" "$content" 0644
   do_cmd sysctl --system
 
-  say "  systemd-coredump ayrı bir yoldur; sysctl onu kapsamaz, ayrıca kapatılır."
+  say "  systemd-coredump is a separate path; sysctl does not cover it, so it is"
+  say "  turned off separately."
   do_cmd systemctl disable --now systemd-coredump.socket 2>/dev/null || true
   do_cmd systemctl mask systemd-coredump.socket systemd-coredump@.service 2>/dev/null || true
   rollback "sudo systemctl unmask systemd-coredump.socket systemd-coredump@.service && sudo systemctl enable --now systemd-coredump.socket"
@@ -196,21 +203,21 @@ EOF
 
 step_limits() {
   step "4/7 ulimit core 0"
-  say "  Ne yapar: PAM oturumları için core limitini 0 yapar; systemd"
-  say "            servisleri için DefaultLimitCORE=0 drop-in'i yazar."
-  say "  Neden: core_pattern'e ek olarak RLIMIT_CORE=0, çekirdeğin döküm"
-  say "            yolunu hiç denememesini sağlar. limits.conf tek başına"
-  say "            systemd servislerini kapsamaz — iki katman gerekir."
+  say "  What it does: sets the core limit to 0 for PAM sessions; writes the"
+  say "                DefaultLimitCORE=0 drop-in for systemd services."
+  say "  Why: besides core_pattern, RLIMIT_CORE=0 makes the kernel never try the"
+  say "       dump path at all. limits.conf alone does not cover systemd"
+  say "       services — two layers are needed."
   rollback "sudo sed -i '/BEGIN zifiri-harden/,/END zifiri-harden/d' $LIMITS_FILE && sudo rm -f $LIMITS_DROPIN"
 
   if [ -f "$LIMITS_FILE" ] && grep -qF "$LIMITS_BEGIN" "$LIMITS_FILE"; then
-    say "  $LIMITS_FILE: zifiri bloğu zaten var (idempotent)"
+    say "  $LIMITS_FILE: zifiri block already present (idempotent)"
   else
     local block
     block=$(cat <<EOF
 $LIMITS_BEGIN
-# core 0: çöken süreç RAM'ini diske dökemez. PAM oturumları içindir;
-# systemd servisleri $LIMITS_DROPIN ve unit içindeki LimitCORE=0 ile kapsanır.
+# core 0: a crashing process cannot dump its RAM to disk. For PAM sessions;
+# systemd services are covered by $LIMITS_DROPIN and LimitCORE=0 in the unit.
 *       hard    core    0
 *       soft    core    0
 root    hard    core    0
@@ -219,24 +226,24 @@ $LIMITS_END
 EOF
 )
     if (( DRY_RUN )); then
-      would "eklenecek blok: $LIMITS_FILE"
+      would "block to append: $LIMITS_FILE"
       printf '%s\n' "$block" | sed 's/^/      | /'
     else
       [ -d "$(dirname "$LIMITS_FILE")" ] || install -d -m 0755 "$(dirname "$LIMITS_FILE")"
       if ! printf '\n%s\n' "$block" >>"$LIMITS_FILE"; then
-        warn "$LIMITS_FILE yazılamadı — bu adım ATLANDI"
+        warn "$LIMITS_FILE could not be written — this step was SKIPPED"
         return 1
       fi
-      say "  eklendi: $LIMITS_FILE (zifiri bloğu)"
+      say "  appended: $LIMITS_FILE (zifiri block)"
     fi
   fi
 
   local dropin
   dropin=$(cat <<'EOF'
-# zifiri — plan §5.1. YÖNETİLEN DOSYA: infra/harden.sh yazar.
-# Yeni başlayan tüm servisler için core limiti 0. Çalışan servisler bu
-# değeri ancak yeniden başlatılınca alır; zifiri unit'leri ayrıca kendi
-# içinde LimitCORE=0 taşır (infra/systemd/*.service).
+# zifiri — plan §5.1. MANAGED FILE: written by infra/harden.sh.
+# Core limit 0 for every service that starts. Running services pick this value
+# up only when restarted; the zifiri units also carry their own LimitCORE=0
+# (infra/systemd/*.service).
 [Manager]
 DefaultLimitCORE=0
 EOF
@@ -250,29 +257,29 @@ EOF
 
 step_journald() {
   step "5/7 journald — Storage=none"
-  say "  Ne yapar: journald'ı diske hiç yazmayacak şekilde yapılandırır ve"
-  say "            mevcut journal dosyalarını boşaltır."
-  say "  Neden: journald; unit çıktısını, çekirdek mesajlarını ve (açıksa)"
-  say "            audit kayıtlarını diske yazar. Tor ve nginx'in stdout'u"
-  say "            buraya düşer; Storage=none ile hiçbiri kalıcı olmaz."
+  say "  What it does: configures journald so it never writes to disk, and"
+  say "                empties the existing journal files."
+  say "  Why: journald writes unit output, kernel messages and (if enabled)"
+  say "       audit records to disk. Tor's and nginx's stdout lands here; with"
+  say "       Storage=none none of it persists."
   rollback "sudo rm -f $JOURNALD_DROPIN && sudo systemctl restart systemd-journald"
 
   local dropin
   dropin=$(cat <<'EOF'
-# zifiri — plan §5.1. YÖNETİLEN DOSYA: infra/harden.sh yazar.
-# Storage=none: journal DOSYASI hiç oluşturulmaz. Kayıt yalnız çalışma
-# zamanında bellekte tutulur, yeniden başlatmada kaybolur. `journalctl`
-# bu makinede geçmiş göstermez — bilinçli, hata ayıklarken geçici aç.
+# zifiri — plan §5.1. MANAGED FILE: written by infra/harden.sh.
+# Storage=none: the journal FILE is never created. Records are kept in memory
+# at runtime only and are lost on restart. `journalctl` shows no history on
+# this machine — deliberate; turn it on temporarily while debugging.
 [Journal]
 Storage=none
-# syslog'a köprüleme: rsyslog varsa orası diske yazar, köprüyü kes.
+# Bridging to syslog: if rsyslog exists it writes to disk there, so cut the bridge.
 ForwardToSyslog=no
 EOF
 )
   install_content "$JOURNALD_DROPIN" "$dropin" 0644
   do_cmd systemctl restart systemd-journald
 
-  say "  mevcut journal dosyaları boşaltılıyor (drop-in yalnız yeni kaydı keser)."
+  say "  emptying the existing journal files (the drop-in only cuts new records)."
   do_cmd journalctl --rotate 2>/dev/null || true
   do_cmd journalctl --vacuum-time=1s 2>/dev/null || true
 }
@@ -282,15 +289,17 @@ EOF
 # ---------------------------------------------------------------------------
 
 step_logs() {
-  step "6/7 /var/log — eski kayıtları sil"
-  say "  Ne yapar: döndürülmüş/sıkıştırılmış logları ve $LOG_AGE_DAYS günden eski"
-  say "            *.log dosyalarını siler."
-  say "  Neden: log rotasyonu kayıtları aylarca tutar; canary taraması (§5.2)"
-  say "            eski dosyalarda isabet bulursa faz kırmızıdır. Silme, ömrü"
-  say "            kısaltır — içerik zaten yazılmamalıydı, bu ikinci savunma."
-  say "  Korunan: wtmp, btmp, lastlog (istemci değil OPERATÖR oturum kaydı,"
-  say "            §5 son paragraf) ve /var/log/journal (5. adımda boşaltıldı)."
-  rollback "yok — silinen dosya geri gelmez. Önce --dry-run ile listeyi görün."
+  step "6/7 /var/log — delete old records"
+  say "  What it does: deletes rotated/compressed logs and *.log files older"
+  say "                than $LOG_AGE_DAYS days."
+  say "  Why: log rotation keeps records for months; if the canary scan (§5.2)"
+  say "       hits in an old file the phase is red. Deleting shortens the"
+  say "       lifetime — the content should not have been written at all; this"
+  say "       is the second line of defense."
+  say "  Preserved: wtmp, btmp, lastlog (the OPERATOR's session records, not the"
+  say "             client's — §5 last paragraph) and /var/log/journal (emptied"
+  say "             in step 5)."
+  rollback "none — a deleted file does not come back. Look at the list with --dry-run first."
 
   local common=(-xdev -type f ! -path '/var/log/journal/*'
                 ! -name wtmp ! -name btmp ! -name lastlog)
@@ -299,13 +308,13 @@ step_logs() {
     would "find /var/log ${common[*]} \\( -name '*.gz' -o -name '*.xz' -o -name '*.zst' -o -name '*.bz2' -o -name '*.old' -o -name '*.log.[0-9]*' \\) -delete"
     would "find /var/log ${common[*]} -name '*.log' -mtime +$LOG_AGE_DAYS -delete"
     if is_linux; then
-      say "  (dry-run listesi:)"
+      say "  (dry-run list:)"
       find /var/log "${common[@]}" \
         \( -name '*.gz' -o -name '*.xz' -o -name '*.zst' -o -name '*.bz2' \
            -o -name '*.old' -o -name '*.log.[0-9]*' \) \
-        -printf '      silinecek: %p (%s bayt)\n' 2>/dev/null || true
+        -printf '      would delete: %p (%s bytes)\n' 2>/dev/null || true
       find /var/log "${common[@]}" -name '*.log' -mtime +"$LOG_AGE_DAYS" \
-        -printf '      silinecek: %p (%s bayt)\n' 2>/dev/null || true
+        -printf '      would delete: %p (%s bytes)\n' 2>/dev/null || true
     fi
     return 0
   fi
@@ -322,32 +331,32 @@ step_logs() {
 }
 
 # ---------------------------------------------------------------------------
-# 6. ön kontrol (LUKS uyarısı) — bilgi, hata değil
+# 6. preflight (LUKS warning) — information, not an error
 # ---------------------------------------------------------------------------
 
 step_preflight() {
-  step "1/7 kapsam ve ön kontrol"
-  say "  Bu betik diski şifrelemez. LUKS kurulum anında yapılmalı (harden.md)."
+  step "1/7 scope and preflight"
+  say "  This script does not encrypt the disk. LUKS must be set up at install time (harden.md)."
   if is_linux; then
     if dmsetup ls --target crypt 2>/dev/null | grep -q .; then
-      say "  dm-crypt aygıtı var: $(dmsetup ls --target crypt 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+      say "  dm-crypt device present: $(dmsetup ls --target crypt 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
     else
-      warn "dm-crypt aygıtı görünmüyor: disk şifrelemesi (§11.4) karşılanmıyor olabilir."
+      warn "no dm-crypt device visible: disk encryption (§11.4) may not be met."
     fi
   else
-    say "  dm-crypt durumu okunamadı (Linux değil)."
+    say "  dm-crypt status unreadable (not Linux)."
   fi
-  say "  Kapsam dışı: sağlayıcı logları, ağ gözlemi, RAM imajı, DNS, yedek."
+  say "  Out of scope: provider logs, network observation, RAM image, DNS, backup."
 }
 
 # ---------------------------------------------------------------------------
-# 7. doğrulama
+# 7. verification
 # ---------------------------------------------------------------------------
 
 step_verify() {
-  step "7/7 doğrulama"
-  say "  Beklenen:"
-  say "    swapon --show                 → boş"
+  step "7/7 verification"
+  say "  Expected:"
+  say "    swapon --show                 → empty"
   say "    sysctl -n kernel.core_pattern → |/bin/false"
   say "    sysctl -n fs.suid_dumpable    → 0"
   say "    sysctl -n kernel.dmesg_restrict → 1"
@@ -357,7 +366,7 @@ step_verify() {
 
   if (( DRY_RUN )) || ! is_linux; then
     say ""
-    say "  (dry-run: ölçüm yapılmadı)"
+    say "  (dry-run: no measurement taken)"
     return 0
   fi
 
@@ -371,18 +380,18 @@ step_verify() {
   cores=$(awk '/^[^#]/ && $3=="core" {printf "%s=%s ", $2, $4}' "$LIMITS_FILE" 2>/dev/null || true)
 
   say ""
-  say "  --- şimdiki durum ---"
-  say "    swap alanı sayısı:      $swaps (0 beklenir)"
+  say "  --- current state ---"
+  say "    swap area count:        $swaps (0 expected)"
   say "    kernel.core_pattern:    $pattern"
   say "    fs.suid_dumpable:       $suid"
   say "    kernel.dmesg_restrict:  $dmesg"
   say "    vm.swappiness:          $swappiness"
   say "    journal:                ${usage:-?}"
-  say "    limits.conf core:       ${cores:-<yok>}"
+  say "    limits.conf core:       ${cores:-<none>}"
 }
 
 # ---------------------------------------------------------------------------
-# ana akış
+# main flow
 # ---------------------------------------------------------------------------
 
 main() {
@@ -390,43 +399,43 @@ main() {
     case "$1" in
       --dry-run|-n) DRY_RUN=1 ;;
       --log-age-days)
-        LOG_AGE_DAYS=${2:?"--log-age-days bir sayı ister"}
+        LOG_AGE_DAYS=${2:?"--log-age-days wants a number"}
         shift
         ;;
       --log-age-days=*) LOG_AGE_DAYS=${1#*=} ;;
       -h|--help) usage; exit 0 ;;
-      *) printf '%s: bilinmeyen argüman: %s\n\n' "$PROG" "$1" >&2; usage >&2; exit 1 ;;
+      *) printf '%s: unknown argument: %s\n\n' "$PROG" "$1" >&2; usage >&2; exit 1 ;;
     esac
     shift
   done
 
   case "$LOG_AGE_DAYS" in
-    ''|*[!0-9]*) printf '%s: --log-age-days pozitif tam sayı olmalı: %s\n' "$PROG" "$LOG_AGE_DAYS" >&2; exit 1 ;;
+    ''|*[!0-9]*) printf '%s: --log-age-days must be a positive integer: %s\n' "$PROG" "$LOG_AGE_DAYS" >&2; exit 1 ;;
   esac
 
-  say "zifiri sertleştirme — plan §5.1, §11.4"
-  say "ortam: $(uname -srm 2>/dev/null || echo bilinmiyor)"
+  say "zifiri hardening — plan §5.1, §11.4"
+  say "environment: $(uname -srm 2>/dev/null || echo unknown)"
   if (( DRY_RUN )); then
-    say "mod: DRY-RUN (hiçbir şey değiştirilmez)"
+    say "mode: DRY-RUN (nothing is changed)"
   else
-    say "mod: UYGULA"
+    say "mode: APPLY"
   fi
 
-  # --- platform kapısı ------------------------------------------------------
-  # Betik Linux'a özgüdür: /proc/sys, sysctl, systemctl, find -printf.
-  # Linux olmayan ortamda (macOS, Windows/MSYS, konteyner host'u) sessizce
-  # yarım iş yapmak yerine durur. Dry-run planı yine yazdırır — komutlar
-  # çalıştırılmaz, yalnız görünür — ve 2 ile çıkar.
+  # --- platform gate --------------------------------------------------------
+  # The script is Linux-specific: /proc/sys, sysctl, systemctl, find -printf.
+  # On a non-Linux environment (macOS, Windows/MSYS, a container host) it stops
+  # instead of silently doing half the work. The dry-run plan is still printed —
+  # the commands are not run, only shown — and it exits 2.
   if ! is_linux; then
     say ""
-    say "HATA: bu betik Linux sunucu içindir; bu ortamda uygulanamaz."
-    say "  tespit: $(uname -s 2>/dev/null || echo bilinmiyor)"
-    say "  gerekli: Linux çekirdeği + /proc/sys + systemd (Debian/Ubuntu VPS,"
-    say "           infra/deploy.md). Windows/macOS'ta swapoff, sysctl,"
-    say "           systemctl yoktur; komutlar burada çalışmaz."
+    say "ERROR: this script is for a Linux server; it cannot be applied here."
+    say "  detected: $(uname -s 2>/dev/null || echo unknown)"
+    say "  required: a Linux kernel + /proc/sys + systemd (Debian/Ubuntu VPS,"
+    say "            infra/deploy.md). Windows/macOS have no swapoff, sysctl or"
+    say "            systemctl; the commands do not run here."
     if (( DRY_RUN )); then
       say ""
-      say "Dry-run planı aşağıda; HİÇBİR komut çalıştırılmadı, hiçbir dosya değiştirilmedi."
+      say "Dry-run plan follows; NO command was run and no file was changed."
       DRY_RUN=1
       step_preflight
       step_swap
@@ -436,13 +445,13 @@ main() {
       step_logs
       step_verify
       say ""
-      say "SONUÇ: plan yazdırıldı; uygulanmadı (Linux değil)."
+      say "RESULT: plan printed; not applied (not Linux)."
     fi
     exit 2
   fi
 
   if (( ! DRY_RUN )) && [ "$(id -u)" -ne 0 ]; then
-    printf '%s: uygulamak için root gerekli (sudo %s)\n' "$PROG" "$PROG" >&2
+    printf '%s: root is required to apply (sudo %s)\n' "$PROG" "$PROG" >&2
     exit 1
   fi
 
@@ -456,10 +465,11 @@ main() {
 
   say ""
   if (( DRY_RUN )); then
-    say "SONUÇ: dry-run tamam; hiçbir şey değiştirilmedi."
+    say "RESULT: dry-run complete; nothing was changed."
   else
-    say "SONUÇ: sertleştirme uygulandı. Kapsam dışı olanlar harden.md'de."
+    say "RESULT: hardening applied. What stays out of scope is in harden.md."
   fi
 }
 
 main "$@"
+

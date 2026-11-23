@@ -465,7 +465,7 @@ size per bucket.
 | The audit chain verifies and its head is published daily | `mix zifiri.verify --only audit; curl -sS "$Z/audit" \| jq -r '.head'` | exit code `0` and a 64-hex head | §8.2 |
 | A mod session cannot be linked to content | `mix test test/zifiri/mod_separation_test.exs` ⏳P6 | `0 failures` | §8.3 |
 | The core tests pass with the module absent | `mv $C/app/lib/zifiri/modules /tmp/mod.bak && mix test 2>&1 \| tail -3; mv /tmp/mod.bak $C/app/lib/zifiri/modules` | `0 failures` | §12/1 |
-| No privacy module is on by default | `mix zifiri.verify --only modules` | no `MODÜL AÇIK` line, exit code `0` | §12/4 |
+| No privacy module is on by default | `mix zifiri.verify --only modules` | no `MODULE ON` line, exit code `0` | §12/4 |
 
 ---
 

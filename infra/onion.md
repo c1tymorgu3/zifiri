@@ -1,119 +1,123 @@
-# Onion servisi
+# Onion service
 
-Plan §11.3: clearnet + onion birlikte. Bu dosya onion tarafının nasıl kurulduğunu,
-neyi çözdüğünü ve **neyi çözmediğini** yazar. İddia/mod eşlemesi:
-`docs/spec.md` §Claim texts. Yapılandırma denetimi: `scripts/verify_onion.sh`.
+Plan §11.3: clearnet + onion together. This file describes how the onion side is
+set up, what it solves and **what it does not solve**. Claim/module mapping:
+`docs/spec.md` §Claim texts. Configuration audit: `scripts/verify_onion.sh`.
 
-## Neden var
+## Why it exists
 
-Onion, sunucunun istemci IP'sini hiç görmemesinin tek tam yoludur. Tor devresi
-son düğümde biter; nginx'e gelen bağlantının kaynağı 127.0.0.1'dir. Ağ
-gözlemcisi (A2) için ise bağlantı, çıkış düğümü ile sunucu arasındaki bir
-şifreli akıştır: hangi kullanıcının hangi sayfayı açtığı eşleştirilemez.
-İleriye dönük gözetimde (A3) elimizdeki tek ek savunma budur (§14 #8).
+Onion is the only complete way for the server never to see the client IP. The
+Tor circuit ends at the last hop; the connection that reaches nginx comes from
+127.0.0.1. To a network observer (A2) the connection is an encrypted stream
+between the exit node and the server: which user opened which page cannot be
+matched. Under passive surveillance (A3) this is the only extra defense we have
+(§14 #8).
 
-## Neden IP limiti anlamsız (§4.4)
+## Why an IP limit is meaningless (§4.4)
 
-- Clearnet'te nginx istemciyi görür ama **limiti uygulayacak bir yer yoktur**:
-  `X-Forwarded-For` altta yatan iddiadır, istemci uydurabilir; gerçek adres
-  TCP kaynağıdır ve o da NAT/CGNAT arkasında yüzlerce kişiyi tek adreste
-  toplar.
-- Onion'da istemci zaten tek adrestir: 127.0.0.1.
-- İkisi birlikteyken: aynı kullanıcı clearnet'ten de onion'dan da gelebilir;
-  "adres başına N istek" sayacı, onion'daki tüm kullanıcıları tek kovaya atar
-  ve kova dolduğunda hizmeti herkese kapatır.
+- On clearnet nginx sees the client but **there is nowhere to enforce a limit**:
+  `X-Forwarded-For` is the underlying claim, and the client can forge it; the
+  real address is the TCP source, and behind NAT/CGNAT that lumps hundreds of
+  people into one address.
+- On onion the client is already a single address: 127.0.0.1.
+- With both together: the same user can arrive over clearnet and over onion;
+  a "N requests per address" counter throws every onion user into one bucket,
+  and when the bucket fills it closes the service for everyone.
 
-Bu yüzden `nginx.conf`'ta `limit_req` / `limit_conn` **yoktur** ve olmamalıdır.
-Yük koruması PoW (§4.4) ve tor'un kendi intro-DoS savunması üzerinden yapılır.
-Doğrulama: `docker compose exec nginx nginx -T | grep -cE '^\s*limit_(req|conn)'` → `0`
-(yorum satırları da `limit_req` içerdiği için çapa şart).
+That is why `nginx.conf` **has no** `limit_req` / `limit_conn`, and must not:
+load protection goes through PoW (§4.4) and Tor's own intro-DoS defense.
+Verification: `docker compose exec nginx nginx -T | grep -cE '^\s*limit_(req|conn)'` → `0`
+(the anchor is required because the comment lines mention `limit_req` too).
 
-## Kurulum
+## Setup
 
-1. Dizinler (host, repo içinde):
+1. Directories (host, inside the repo):
 
    ```bash
    mkdir -p infra/tor/data/hidden_service
    chmod 700 infra/tor/data infra/tor/data/hidden_service
    ```
 
-2. Sahiplik. Tor, veri dizinine **kendi kullanıcısıyla** yazmak zorundadır ve
-   tor, sahibi olduğu olmayan bir `HiddenServiceDir`'i reddeder. Imajdaki
-   kullanıcının UID'ini tahmin etme, sor:
+2. Ownership. Tor must write to the data directory **as its own user**, and Tor
+   rejects a `HiddenServiceDir` it does not own. Do not guess the UID of the
+   user in the image, ask it:
 
    ```bash
    docker run --rm --entrypoint sh dockurr/tor -c 'id'
-   # örn: uid=100 gid=101(tor)
+   # e.g.: uid=100 gid=101(tor)
    sudo chown -R 100:101 infra/tor/data
    ```
 
-3. `docker-compose.yml` içindeki `tor` servisi nginx'in ağ ad alanını paylaşır
-   (`network_mode: "service:nginx"`). Bu, "aynı makinede loopback" ifadesinin
-   konteyner karşılığıdır: `HiddenServicePort 80 127.0.0.1:8081` gerçekten
-   loopback'e gider, docker köprüsü üzerinden bir konteyner IP'sine değil.
-   Köprü IP'si kullanmak da çalışırdı ama o zaman "tek adres" iddiası docker
-   ağına bağlı kalırdı; loopback niyeti açıkça yazar.
+3. The `tor` service in `docker-compose.yml` shares nginx's network namespace
+   (`network_mode: "service:nginx"`). This is the container form of "loopback on
+   the same machine": `HiddenServicePort 80 127.0.0.1:8081` really goes to
+   loopback, not to a container IP over the docker bridge. Using the bridge IP
+   would work too, but then the "single address" claim would depend on the
+   docker network; loopback states the intent plainly.
 
-4. Açılış:
+4. Start:
 
    ```bash
    docker compose up -d tor
    cat infra/tor/data/hidden_service/hostname      # → xxxxxxxxxxxxxxxx.onion
    ```
 
-   Bu adres onion v3 anahtarından türer. `infra/tor/data` silinirse adres
-   **değişir** ve eski adres bir daha çalışmaz. Yedek politikası yoktur
-   (§11.5) ama bu dizin kullanıcı verisi değildir; kaybı içerik kaybı değil,
-   adres kaybıdır.
+   This address is derived from the onion v3 key. If `infra/tor/data` is
+   deleted the address **changes** and the old address never works again. There
+   is no backup policy (§11.5), but this directory is not user data; losing it
+   is not losing content, it is losing the address.
 
-## HiddenServicePort yönlendirmesi
+## HiddenServicePort forwarding
 
-Zincirin tamamı tek satırda:
+The whole chain on one line:
 
 ```text
-istemci → tor devresi (3 düğüm) → bu makinedeki tor daemon
-        → HiddenServicePort 80 127.0.0.1:8081   (infra/tor/config/torrc)
-        → nginx  server { listen 127.0.0.1:8081; server_name $ONION_HOST; }
-        → unix soket → BEAM
+client → tor circuit (3 nodes) → the tor daemon on this machine
+       → HiddenServicePort 80 127.0.0.1:8081   (infra/tor/config/torrc)
+       → nginx  server { listen 127.0.0.1:8081; server_name $ONION_HOST; }
+       → unix socket → BEAM
 ```
 
-| Adım | Dosya | Satır | Yanlış olursa |
+| Step | File | Line | If it is wrong |
 |---|---|---|---|
-| tor → nginx hedefi | `infra/tor/config/torrc` | `HiddenServicePort 80 127.0.0.1:8081` | onion açılır, 502 döner |
-| nginx listener | `infra/nginx.conf` | `listen 127.0.0.1:8081;` | tor bağlanamaz, servis ölü |
-| nginx Host eşleşmesi | `infra/nginx.conf` | `server_name $ONION_HOST;` | istek varsayılan bloğa (clearnet) düşer, onion adresinde clearnet içeriği servis edilir |
-| `$ONION_HOST` render | `infra/deploy.md` (iki geçişli render) | `hostname` dosyasındaki adres | `server_name` boş kalır, `nginx -t` düşer |
+| tor → nginx target | `infra/tor/config/torrc` | `HiddenServicePort 80 127.0.0.1:8081` | onion comes up, returns 502 |
+| nginx listener | `infra/nginx.conf` | `listen 127.0.0.1:8081;` | tor cannot connect, the service is dead |
+| nginx Host match | `infra/nginx.conf` | `server_name $ONION_HOST;` | the request falls to the default block (clearnet), clearnet content is served at the onion address |
+| `$ONION_HOST` render | `infra/deploy.md` (two-pass render) | the address in the `hostname` file | `server_name` stays empty, `nginx -t` fails |
 
-`HiddenServicePort`'un ilk sayısı **sanal** porttur (tor'un dinlediği 80), ikincisi
-gerçek hedeftir. 8081 dışarı açılmaz; `docker-compose.yml`'de publish edilmez ve
-`listen` yalnız loopback'tedir — yani 8081'e ulaşmanın tek yolu tor'dur. Bu, "IP
-yok" iddiasının yapılandırma karşılığıdır (`docs/spec.md` §Claim texts).
+The first number of `HiddenServicePort` is the **virtual** port (the 80 Tor
+listens on), the second is the real target. 8081 is not exposed: it is not
+published in `docker-compose.yml` and `listen` is loopback-only — so the only way
+to reach 8081 is through Tor. This is the configuration form of the "no IP"
+claim (`docs/spec.md` §Claim texts).
 
-Doğrulama:
+Verification:
 
 ```bash
-# tor gerçekten loopback'e mi bağlanıyor? (dışarıdan gelen bağlantı görünmemeli)
-ss -tnp | grep 8081                      # yalnız 127.0.0.1
+# is tor really connecting to loopback? (an outside connection should not appear)
+ss -tnp | grep 8081                      # 127.0.0.1 only
 
-# iddianın dayandığı satırlar yüklü mü?
-scripts/verify_onion.sh --docker         # 0 = geçti, 1 = eksik, 3 = nginx yok
+# are the lines the claim rests on loaded?
+scripts/verify_onion.sh --docker         # 0 = pass, 1 = missing, 3 = no nginx
 ```
 
-## İki onion adresi: gerçek + decoy
+## Two onion addresses: real + decoy
 
-Tek onion adresi **kalıcı bir tanıtıcıdır**. Adres onion v3 anahtarından türer ve
-anahtar silinmedikçe değişmez; yani aynı adrese gelen her oturum, aynı ziyaretçi
-olmasa bile tek bir ada bağlanır. Onion IP'yi kaldırır, ama bu kez adresin kendisi
-korelasyon yüzeyi olur: bir gözlemci "bu adrese şu saatlerde giren akışlar aynı
-kişi olabilir" diyebilir; adres bir forumda paylaşıldıysa o paylaşım da izdir.
+A single onion address **is a persistent identifier**. The address is derived
+from the onion v3 key and does not change as long as the key is not deleted; so
+every session that arrives at the same address is tied to one name, even if it
+is not the same visitor. Onion removes the IP, but this time the address itself
+becomes the correlation surface: an observer can say "the flows into this
+address around these hours might be the same person"; if the address was shared
+publicly, that share is a trace too.
 
-Öneri: **iki ayrı HiddenServiceDir** — biri gerçek servis, biri decoy. İkisi de
-aynı nginx listener'ına gider, ikisi de aynı içeriği sunar; dışarıdan ayırt
-edilemezler (aynı gövde, aynı başlıklar, aynı zamanlama — decoy kova mantığının
-adres düzeyindeki karşılığı, §6.2).
+Suggestion: **two separate HiddenServiceDirs** — one the real service, one a
+decoy. Both go to the same nginx listener and both serve the same content; from
+outside they cannot be told apart (same body, same headers, same timing — the
+address-level form of the bucket logic, §6.2).
 
 ```conf
-# infra/tor/config/torrc — ikinci (decoy) adres
+# infra/tor/config/torrc — the second (decoy) address
 HiddenServiceDir /var/lib/tor/hidden_service_decoy
 HiddenServiceVersion 3
 HiddenServicePort 80 127.0.0.1:8081
@@ -121,81 +125,84 @@ HiddenServiceEnableIntroDoSDefense 1
 HiddenServicePoWDefensesEnabled 1
 ```
 
-Neden:
+Why:
 
-1. **Korelasyonu böler.** İki adresin trafiği ayrı ayrı toplanır; tek adresin
-   "tek kullanıcı" gibi okunması zorlaşır.
-2. **Link rotasını böler.** Adreslerden biri ifşa olursa (forumda paylaşım, ekran
-   görüntüsü) diğeri temiz kalır — gerçek adres anahtar silinmeden değiştirilemez,
-   decoy değiştirilebilir.
-3. **Maliyeti yok.** İkinci servis aynı tor sürecinde, aynı nginx bloğunda çalışır;
-   ek süreç, ek port, ek log yok.
+1. **It splits correlation.** The traffic of the two addresses is collected
+   separately; reading a single address as "a single user" becomes harder.
+2. **It splits link rot.** If one of the addresses is exposed (shared in a chat
+   group, in a screenshot) the other stays clean — the real address cannot be
+   changed without deleting its key, the decoy can.
+3. **It costs nothing.** The second service runs in the same Tor process, in
+   the same nginx block; no extra process, port or log.
 
-Sınırı: decoy **korelasyonu zorlaştırır, imkânsız kılmaz** ve "kimlik yok"
-demek değildir. `server_name` yalnız gerçek adresi eşler; decoy adresin Host'u
-farklı olacağı için ya `server_name`'a eklenmeli ya da ikinci listener açılmalıdır —
-eklenmezse decoy istekleri varsayılan bloğa düşer. Adres eklemek `nginx.conf`'ta
-tek satırdır — ama render adımına da yazılmalı, yoksa `$ONION_HOST_DECOY` değişken
-olarak kalır ve `nginx -t` düşer:
+Its limit: the decoy **makes correlation harder, not impossible**, and does not
+mean "no identity". `server_name` matches only the real address; the decoy
+address has a different Host, so it must be added to `server_name` or a second
+listener opened — if it is not, decoy requests fall to the default block. Adding
+the address is one line in `nginx.conf` — but it must also go into the render
+step, otherwise `$ONION_HOST_DECOY` stays a literal variable and `nginx -t`
+fails:
 
 ```nginx
 server_name $ONION_HOST $ONION_HOST_DECOY;
 ```
 
 ```bash
-# deploy.md'deki render komutuna ek satır — SIRASI ÖNEMLİ:
-# `$ONION_HOST_DECOY`, `$ONION_HOST` ile başlar. Uzun değişken önce değiştirilmezse
-# `$ONION_HOST` kuralı onu `adres.onion_DECOY` yapar.
+# an extra line in the render command from deploy.md — ORDER MATTERS:
+# `$ONION_HOST_DECOY` begins with `$ONION_HOST`. If the longer variable is not
+# replaced first, the `$ONION_HOST` rule turns it into `address.onion_DECOY`.
 sed -e "s|\$ONION_HOST_DECOY|$DECOY|g" -e "s|\$ONION_HOST|$ONION|g" nginx.conf > nginx.conf.rendered
 ```
 
 ## Onion-Location
 
-Clearnet yanıtları `Onion-Location: http://$ONION_HOST<yol>` başlığını taşır
-(`nginx.conf`, 443 sunucusu). Tor Browser bu başlığı görünce adres çubuğunda
-"onion sitesinde aç" düğmesi gösterir; kullanıcı clearnet'ten onion'a tek
-tıkla geçer. Bu, kullanıcıyı zorlamaz — yönlendirme değil, duyuru.
+Clearnet responses carry the `Onion-Location: http://$ONION_HOST<path>` header
+(`nginx.conf`, the 443 server). When Tor Browser sees this header it shows an
+"open in onion site" button in the address bar; the user switches from clearnet
+to onion in one click. This does not force the user — it is an announcement, not
+a redirect.
 
-`$ONION_HOST` deploy sırasında `nginx.conf`'a yazılır (deploy.md, iki geçişli
-render). Onion cevaplarında bu başlık yoktur, HSTS de yoktur: onion http
-üzerinden servis edilir ve tarayıcı `.onion`'ı güvenli kaynak sayar.
+`$ONION_HOST` is written into `nginx.conf` during deploy (deploy.md, two-pass
+render). Onion responses do not have this header, and no HSTS either: onion is
+served over http and the browser treats `.onion` as a secure origin.
 
-Onion bloğunun `server_name`'i `_` değil `$ONION_HOST`'tur: tor orijinal Host
-başlığını korur, yani onion isteği kendi adıyla gelir. Bu, bloğun niyetini
-yapılandırmada yazar; ayrıca `verify_onion.sh` "Onion-Location yalnız clearnet'te
-var mı" denetimini bu ayrım üzerinden yapar.
+The onion block's `server_name` is `$ONION_HOST`, not `_`: Tor preserves the
+original Host header, so an onion request arrives under its own name. This
+states the block's intent in the configuration; it is also how
+`verify_onion.sh` runs the "Onion-Location only on clearnet" check.
 
-Hangi iddianın hangi modda geçerli olduğu (ve hangisinin **geçersiz** olduğu):
-`docs/spec.md` §Claim texts. Özet: clearnet'te "IP uygulamaya girmez" denir, "IP yok"
-denmez; "IP yok" yalnız onion modunda söylenebilir.
+Which claim holds in which mode (and which one is **invalid**): `docs/spec.md`
+§Claim texts. Summary: on clearnet say "the IP does not reach the application",
+not "no IP"; "no IP" can only be said in onion mode.
 
-## Neyi gizlemez
+## What it does not hide
 
-Dürüstlük listesi. Bunlar hata değil, sınır:
+The honesty list. These are not bugs, they are limits:
 
-1. **Sunucunun nerede olduğunu gizlemez.** Onion servisi, sunucunun IP'sini
-   gizlemez; tor devreleri sunucuya bağlanır. Konum gizleme ayrı bir iştir ve
-   kapsam dışıdır (§1).
-2. **Aynı içeriğin clearnet'te olduğunu gizlemez.** Clearnet açık kaldığı
-   sürece bir gözlemci iki yüzeyi karşılaştırabilir; onion, clearnet'in
-   zayıflığını geri almaz (§14 #1).
-3. **Sunucudaki canlı akışı gizlemez (A3).** Sunucu ele geçirilirse onion
-   kullanıcısının isteği nginx'te 127.0.0.1 olarak görünür — kimlik yok, ama
-   istek ve zaman var. Onion'ın kazancı "kim" değil, "nereden"in kaybıdır.
-4. **Zamanlama sızıntısını gizlemez.** Sohbet gerçek zamanlıdır ve tor
-   gecikmesi mesaj-bağlantı eşleştirmesini zorlaştırır, imkânsız kılmaz
-   (§7.4, §14 #4).
-5. **Yazının kendisini gizlemez.** Üslup kimliktir (§14 #12). Onion, ağ
-   katmanını kapatır, metni kapatmaz.
-6. **Hizmet reddini gizlemez.** Onion adresi de taranır ve dövülür; intro-DoS
-   savunması ve PoW bunu yavaşlatır, durdurmaz.
+1. **It does not hide where the server is.** An onion service does not hide the
+   server's IP; Tor circuits connect to the server. Location hiding is a
+   separate job and out of scope (§1).
+2. **It does not hide that the same content is on clearnet.** As long as
+   clearnet stays open an observer can compare the two surfaces; onion does not
+   take back clearnet's weakness (§14 #1).
+3. **It does not hide the live stream on the server (A3).** If the server is
+   compromised the onion user's request is visible in nginx as 127.0.0.1 — no
+   identity, but a request and a time. Onion's gain is not "who", it is the loss
+   of "from where".
+4. **It does not hide the timing leak.** Chat is real time, and Tor latency
+   makes message-connection matching harder, not impossible (§7.4, §14 #4).
+5. **It does not hide the text itself.** Style is identity (§14 #12). Onion
+   closes the network layer, not the text.
+6. **It does not hide denial of service.** The onion address gets scanned and
+   hammered too; intro-DoS defense and PoW slow that down, they do not stop it.
 
-## Bakım
+## Maintenance
 
-- `tor` imajı `dockurr/tor:latest` — üretimde digest'e sabitlenmeli (§10.3
-  mantığı imajlar için de geçerli).
-- Tor sürümü onion PoW savunmasını desteklemeli (`HiddenServicePoWDefensesEnabled`,
-  tor ≥ 0.4.8). Desteklenmezse tor bu satırı yok sayar, açılış düşmez.
-- Hata ayıklarken `logging.driver: none` yüzünden hiçbir şey görünmez. Geçici
-  olarak o servisi `json-file`'a çevir, işin bitince geri al — kalıcı bırakmak
-  §5.1'i çiğnemek demektir.
+- The `tor` image is `dockurr/tor:latest` — pin it to a digest in production
+  (the §10.3 reasoning applies to images too).
+- The Tor version must support onion PoW defense
+  (`HiddenServicePoWDefensesEnabled`, tor ≥ 0.4.8). If it does not, Tor ignores
+  the line; startup does not fail.
+- While debugging, `logging.driver: none` means nothing is visible. Temporarily
+  switch that service to `json-file`, and switch it back when you are done —
+  leaving it is a §5.1 violation.

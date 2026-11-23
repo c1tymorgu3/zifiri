@@ -7,7 +7,7 @@ One page. Each row is **decision · why · instead of**. The binding contract is
 
 | Decision | Why | Instead of |
 |---|---|---|
-| Three planes: room / 1:1 / listing; no forum | One anonymity sentence cannot be said for three surfaces at once: on a listing the moment of publishing is already public, in chat time alone leaks identity | forum, subject tree, voting, the `k = 5` pool, bulk publish |
+| Three planes: room / 1:1 / listing; no fourth plane | One anonymity sentence cannot be said for three surfaces at once: on a listing the moment of publishing is already public, in chat time alone leaks identity | forum, subject tree, voting, the `k = 5` pool, bulk publish |
 | Each plane carries its own claim | Listing "no identity", 1:1 "no sender", room "moment of writing hidden"; saying one sentence for all three would be a lie | one general "anonymity" claim |
 | No claim against A1 (the operator) | The server produces the decoys, so whoever writes the padding can tell them apart; the set against A1 is k, the number of clients that sent cover in that 10-minute window, and "99%" is only true once k ≥ 120 | v4's "decoys are indistinguishable on disk" |
 | A2/A3 claim: bucket + decoy, bucket 120 (99.2%, 69 MB/day) | A number means nothing without a defined adversary; 99.9% costs 8× the traffic for a fraction of a percent, and that money is better spent on code | a fixed percentage written for A1; the self-filling pool and "≈1/n" (unmeasurable, wrong against an active attacker) |
