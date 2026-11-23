@@ -9,7 +9,7 @@
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="680 tests" src="https://img.shields.io/badge/tests-680%20passing-brightgreen?style=flat-square">
   <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
-  <img alt="49 claims" src="https://img.shields.io/badge/claims-49%20verified-yellow?style=flat-square">
+  <img alt="49 claims" src="https://img.shields.io/badge/claims-34%2F49%20green-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
 </p>
 
@@ -22,10 +22,14 @@
 No account, no session, no cookie, no author column. You generate a key in the browser, post,
 and the server keeps a row with no path back to you.
 
-The number that matters is 120. A message does not leave when you press send: it joins a
+There are two ways to send, and the faster one is the default.
+
+**Fast** leaves immediately. The only cover is whoever else wrote in the last minute, and the
+button prints that number: with no traffic it reads 1, which is the honest answer, because the
+observer then has one candidate. **Secret send** trades latency for a set. The message joins a
 ten-minute bucket, the bucket fills with decoys to exactly 120 entries, and the whole thing is
 shuffled before anyone reads it. Somebody watching the wire has 120 candidates and no way to
-tell which one you wrote.
+tell which one you wrote; the button says 120 and ten minutes.
 
 Every claim below carries an ID, and every ID has a command that can refute it. If a claim
 cannot be checked, it does not belong in this file.
@@ -74,10 +78,13 @@ cannot be checked, it does not belong in this file.
 | Surface | What it is | Where it lives |
 |---|---|---|
 | **Rooms** | one public room, 500-message ring buffer, 15-minute retention | RAM only. No table, no file, no log line. Restart is a wipe |
-| **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a random 16-byte mailbox id | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
+| **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a 16-byte tag derived from the writer's seed | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
 | **Listings** | classifieds with plaintext title, price and category, and a padded body | `listings`, UTC day, non-unique `owner_hash` |
 
 ## How a write travels
+
+Secret send is the path below. Fast skips the bucket and hands the envelope straight to the
+store, which is why its number is small.
 
 <p align="center">
   <img src="assets/bucket.gif" alt="Three messages arrive, the bucket fills to 120, shuffles, publishes" width="100%">
@@ -98,12 +105,17 @@ The exchange is a challenge the server issued, bound to one body and one owner. 
 first use, so one solved nonce buys one write, not a season of them. Difficulty is 17 bits by
 default and rises with queue depth; the number comes from a measurement, not an estimate.
 
-Deletion is the other half. Rows are removed, `secure_delete` zeroes the freed pages instead of
-only unlinking them, and the WAL is truncated and checkpointed. A canary written before the
-erase is unreadable in both the `.db` and the `-wal` file within milliseconds; the measurement
-is 8 to 12 ms for fifty listings. `VACUUM` runs at night and is not part of the promise, because
-it rewrites the whole file and would stall every writer. There are no tombstones and no
-backups: a backup is a copy you cannot delete.
+Deletion is the other half, and it is the expensive part. Erasing runs a checkpoint, then
+`VACUUM`, then a second checkpoint: the first checkpoint pushes the delete into the file,
+`secure_delete` has already zeroed the cell, and `VACUUM` rebuilds the file so it stops carrying
+the size and shape of what was removed. A file that stays exactly as large as the post you
+deleted has not forgotten it.
+
+That rewrite is why an erase is not free. Fifty listings measured 8 to 12 ms with nothing else
+running; under concurrent load it has not been measured, and the honest sentence is that a
+`VACUUM` waits for readers and retries three times before it gives up. A sweeper picks up what a
+request could not finish, so an erase that answers `ok` really is done, and one that could not
+finish says so. There are no tombstones and no backups: a backup is a copy you cannot delete.
 
 ## What it does not hide
 
@@ -122,22 +134,24 @@ backups: a backup is a copy you cannot delete.
 
 Forty-nine claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
 status. [docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so
-they cannot drift apart. The eleven below are the ones that decide whether you can be
-identified; the other thirty-eight are the mechanisms that keep them true.
+they cannot drift apart. As of 2026-11-23, **34 are green, 11 are unproven, 1 is flaky** — the
+file says so row by row, including the four that were red until this week.
 
-| ID | Claim |
-|---|---|
-| C-01 | A writer has no account, no session and no cookie |
-| C-02 | A published row has no author field |
-| C-03 | The application never reads an IP or a user agent |
-| C-04 | Every write spends a single-use proof of work |
-| C-05 | Request bodies are padded to one of four bucket sizes |
-| C-06 | A bucket is filled to 120 entries and shuffled |
-| C-07 | A one-to-one message stores no sender |
-| C-08 | No access log is written, at any layer |
-| C-09 | Erase leaves nothing readable on disk |
-| C-10 | The client makes no third-party request |
-| C-11 | The client bundle stays under 100 KiB gzip |
+The eleven below decide whether you can be identified.
+
+| ID | Claim | Status |
+|---|---|---|
+| C-01 | A bucket is ten minutes, target 120, aligned to the wall clock | Green |
+| C-03 | An empty bucket is filled with 120 decoys | Green |
+| C-04 | A decoy is indistinguishable from a real envelope: 4096 B, same header and padding | Green |
+| C-08 | The one-to-one table has no sender, conversation or account column | Green |
+| C-18 | Erase: `secure_delete`, WAL truncate, `VACUUM`; the body is in neither file | Green |
+| C-20 | No logs at code level: no `Logger`, no `IO.inspect`, no `dbg`, no query logging | Green |
+| C-24 | `X-Forwarded-For` and `X-Real-IP` are stripped before the application | Green |
+| C-25 | The proof-of-work challenge is single-use and bound to the envelope | Green |
+| C-26 | Chat writes nothing to disk; the room stream lives in RAM | Green |
+| C-32 | The application does not read IP, XFF or user agent | Green |
+| C-47 | `mailbox_id` is derived from the seed by HKDF | Green |
 
 ### Check one yourself
 
@@ -217,7 +231,7 @@ day.
 <summary><b>Why 120?</b></summary>
 
 Because the anonymity set is the product. 32 entries gives 96.9%, 120 gives 99.2%, 1000 gives
-99.9% — and 1000 entries every ten minutes is 345 MB of cover traffic a day per room. 120 is the
+99.9% — and 1000 entries every ten minutes is about 576 MB of cover traffic a day per room. 120 is the
 point where the guarantee is real and the bill is still small. The arithmetic is in
 [docs/spec.md](docs/spec.md).
 </details>
@@ -248,7 +262,7 @@ Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripp
       ├─ Envelope        four buckets, zero padding, no length leak
       ├─ Bucket         10 minutes, decoy fill, shuffle at the boundary
       ├─ Chat.Store     RAM ring buffer, 500 messages, 15 minutes
-      ├─ Mailbox        sealed envelopes, random id, 72-hour TTL
+      ├─ Mailbox        sealed envelopes, HKDF tag, 72-hour TTL
       ├─ Listings       classifieds, owner token, no seller record
       └─ Vanish         delete, secure_delete, checkpoint, night vacuum
                │
@@ -260,7 +274,7 @@ Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripp
 
 ```
 lib/zifiri/      33 modules, 6.2k lines
-test/            383 tests, 7k lines (more test than code, on purpose)
+test/            383 tests, 7.3k lines against 6.2k of source
 client/          vanilla TypeScript, no framework, 297 tests
 infra/           nginx, Dockerfile, compose, onion, systemd units, harden.sh
 scripts/         drills, measurements, e2e, publish gate
