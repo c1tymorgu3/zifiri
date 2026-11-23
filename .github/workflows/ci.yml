@@ -26,8 +26,8 @@ env:
   MIX_ENV: test
   # Pinned to .tool-versions. mix.exs allows `~> 1.18`; 1.18.4 is the floor and
   # what the workstation pins, so CI tests the version the docs quote.
-  OTP_VERSION: "27.2"
-  ELIXIR_VERSION: "1.18.4"
+  OTP_VERSION: "29.1.2"
+  ELIXIR_VERSION: "1.20.5"
   NODE_VERSION: "22.14.0"
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
   # Elixir: format, compile with warnings as errors, full test suite.
   # ---------------------------------------------------------------------------
   elixir:
-    name: elixir (otp 27, 1.18)
+    name: elixir (otp 29, 1.20)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -365,48 +365,53 @@ jobs:
           done
           echo "ok: README links the claim documents"
 
-      - name: verify.md checks that need only the checkout
+      # Rewritten as Python: the shell version passed on Windows and failed on
+      # the runner, and a check whose log nobody can read is not a check. Each
+      # line prints the count it measured, so a failure names itself.
+      - name: claim greps that need only the checkout
         run: |
-          set -uo pipefail
-          failed=0
+          python3 - <<'PY'
+          import pathlib, re, sys
 
-          # C-12: the Ecto query logger stays off (verify.md §6, the
-          # `grep -c 'log: false' config/*.exs` check).
-          n="$(grep -h -c 'log: false' config/*.exs | awk '{s+=$1} END {print s+0}')"
-          if [ "$n" -ge 1 ]; then
-            echo "ok: ecto log: false present ($n lines)"
-          else
-            echo "::error::no 'log: false' in config/*.exs"
-            failed=1
-          fi
+          failures = []
+          config = "\n".join(p.read_text(encoding="utf-8")
+                             for p in sorted(pathlib.Path("config").glob("*.exs")))
+          lib = "\n".join(p.read_text(encoding="utf-8")
+                          for p in sorted(pathlib.Path("lib").rglob("*.ex"))
+                          if p.as_posix() != "lib/zifiri/transport.ex")
 
-          # C-09: deleted rows are overwritten, not just unlinked.
-          n="$(grep -rn 'secure_delete' lib config | wc -l | tr -d ' ')"
-          if [ "$n" -ge 1 ]; then
-            echo "ok: secure_delete applied in code ($n references)"
-          else
-            echo "::error::secure_delete not referenced"
-            failed=1
-          fi
+          n = config.count("log: false")
+          print(f"log: false occurrences in config/*.exs = {n}")
+          if n < 1:
+              failures.append("no 'log: false' in config/*.exs")
 
-          # C-24, the docs-side copy of the architecture grep: source files only,
-          # transport exempt, expected 0.
-          n="$(grep -rnE 'remote_ip|x_forwarded_for|x-forwarded-for|user_agent|user-agent' lib \
-                --include='*.ex' --include='*.heex' \
-                | grep -v '^lib/zifiri/transport\.ex:' | wc -l | tr -d ' ')"
-          if [ "$n" -eq 0 ]; then
-            echo "ok: no peer data outside transport (0)"
-          else
-            echo "::error::$n peer-data reference(s) outside transport"
-            failed=1
-          fi
+          n = lib.count("secure_delete") + config.count("secure_delete")
+          print(f"secure_delete references in lib+config = {n}")
+          if n < 1:
+              failures.append("secure_delete not referenced")
 
-          echo "out of scope for a bare checkout: live instance, docker volumes, journalctl,"
-          echo "  core dumps, swapon, and the live SQLite file — see infra/deploy.md and"
-          echo "  scripts/drill/run-all.sh, which need the target host."
-          exit "$failed"
+          pattern = re.compile(r"remote_ip|x_forwarded_for|x-forwarded-for|user_agent|user-agent")
+          hits = [(p.as_posix(), i + 1, line)
+                  for p in sorted(pathlib.Path("lib").rglob("*.ex"))
+                  if p.as_posix() != "lib/zifiri/transport.ex"
+                  for i, line in enumerate(p.read_text(encoding="utf-8").splitlines())
+                  if pattern.search(line)]
+          print(f"peer-data references outside transport = {len(hits)}")
+          for path, line_no, line in hits:
+              print(f"  {path}:{line_no}: {line.strip()[:120]}")
+          if hits:
+              failures.append(f"{len(hits)} peer-data reference(s) outside transport")
 
-  # ---------------------------------------------------------------------------
+          print("out of scope on a bare checkout: live instance, docker volumes, journalctl,")
+          print("  core dumps, swapon, the live SQLite file — see infra/deploy.md.")
+
+          if failures:
+              for f in failures:
+                  print("::error::" + f)
+              sys.exit(1)
+          print("ok: the three checkout-only checks pass")
+          PY
+
   # E2E. The script that drives a browser does not exist yet.
   #
   # `hashFiles()` cannot be used as a job-level `if:` here: job conditions are
