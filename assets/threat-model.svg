@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" role="img" aria-label="zifiri threat model: five adversary classes A1 to A5, what each sees and cannot see">
+<title>zifiri threat model</title>
+<rect width="900" height="520" fill="#0b0c0d"/>
+<text x="32" y="44" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600" fill="#e8e6e1" letter-spacing="-0.2">Threat model</text>
+<text x="32" y="64" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.8" font-weight="400" fill="#8b9096">Every number below is measured against a named adversary. A1 sits outside the model.</text>
+<text x="754.6" y="44" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="9" font-weight="400" fill="#8b9096">bucket 120  ·  </text>
+<text x="868" y="44" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="9" font-weight="400" fill="#e8a33d" text-anchor="end">99.2 %</text>
+<rect x="32" y="88" width="124" height="46" fill="#101214" stroke="#1e2124" stroke-width="1" rx="1"/>
+<text x="44" y="107" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#e8e6e1">client</text>
+<text x="44" y="121" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">in-tab key</text>
+<rect x="184" y="88" width="172" height="46" fill="#101214" stroke="#1e2124" stroke-width="1" rx="1"/>
+<text x="196" y="107" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#e8e6e1">bucket</text>
+<text x="196" y="121" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="8.4" font-weight="400" fill="#8b9096">120  ·  10 min</text>
+<rect x="384" y="88" width="136" height="46" fill="#101214" stroke="#1e2124" stroke-width="1" rx="1"/>
+<text x="396" y="107" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#e8e6e1">publish</text>
+<text x="396" y="121" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">shuffled</text>
+<rect x="548" y="88" width="140" height="46" fill="#101214" stroke="#1e2124" stroke-width="1" rx="1"/>
+<text x="560" y="107" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#e8e6e1">disk</text>
+<text x="560" y="121" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="8.4" font-weight="400" fill="#8b9096">72 h</text>
+<line x1="156" y1="111.0" x2="179" y2="111.0" stroke="#1e2124" stroke-width="1"/>
+<path d="M178 107.5 L183 111.0 L178 114.5" fill="none" stroke="#1e2124" stroke-width="1"/>
+<line x1="356" y1="111.0" x2="379" y2="111.0" stroke="#1e2124" stroke-width="1"/>
+<path d="M378 107.5 L383 111.0 L378 114.5" fill="none" stroke="#1e2124" stroke-width="1"/>
+<line x1="520" y1="111.0" x2="543" y2="111.0" stroke="#1e2124" stroke-width="1"/>
+<path d="M542 107.5 L547 111.0 L542 114.5" fill="none" stroke="#1e2124" stroke-width="1"/>
+<text x="170" y="146" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="8" font-weight="400" fill="#8b9096" text-anchor="middle">4096 B</text>
+<text x="370" y="146" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="8" font-weight="400" fill="#8b9096" text-anchor="middle">120</text>
+<text x="534" y="146" font-family="IBM Plex Mono, ui-monospace, Cascadia Mono, Menlo, monospace" font-size="8" font-weight="400" fill="#8b9096" text-anchor="middle">1 / 120</text>
+<rect x="716" y="91" width="10" height="8" fill="#e8a33d" stroke="#e8a33d" stroke-width="1" rx="1"/>
+<text x="732" y="99" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9" font-weight="400" fill="#e8e6e1">your message</text>
+<rect x="716" y="110" width="10" height="8" fill="#101214" stroke="#1e2124" stroke-width="1" rx="1"/>
+<text x="732" y="118" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9" font-weight="400" fill="#e8e6e1">decoy</text>
+<text x="716" y="132" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8" font-weight="400" fill="#8b9096">same size · same envelope</text>
+<line x1="32" y1="162" x2="868" y2="162" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="186" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.3" font-weight="400" fill="#8b9096" letter-spacing="1.3">CLASS</text>
+<text x="200" y="186" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.3" font-weight="400" fill="#8b9096" letter-spacing="1.3">SEES</text>
+<text x="552" y="186" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.3" font-weight="400" fill="#8b9096" letter-spacing="1.3">CANNOT SEE</text>
+<line x1="32" y1="195" x2="868" y2="195" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="210" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#8b9096" letter-spacing="0.6">A1</text>
+<text x="56" y="210" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600" fill="#e8e6e1">operator</text>
+<text x="32" y="224" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">server owner</text>
+<rect x="200" y="207" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="210" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">the database, the disk, the deploy key</text>
+<rect x="200" y="221" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="224" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">request time placed beside the IP, on clearnet</text>
+<rect x="200" y="235" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="238" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">every decoy it wrote: it can pick the real one out</text>
+<rect x="552" y="207" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="210" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">no account, no session, no sender column</text>
+<rect x="552" y="221" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="224" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">no claim on time or IP; after cover, set ≤ k</text>
+<line x1="32" y1="250" x2="868" y2="250" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="270" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#8b9096" letter-spacing="0.6">A2</text>
+<text x="56" y="270" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600" fill="#e8e6e1">network observer</text>
+<text x="32" y="284" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">passive, one link at a time</text>
+<rect x="200" y="267" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="270" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">packet size and time; n envelopes per bucket</text>
+<rect x="200" y="281" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="284" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">the ciphertext, never the plaintext</text>
+<rect x="552" y="267" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="270" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">which of the 120 is yours — 1/120, 99.2 %</text>
+<rect x="552" y="281" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="284" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">a global view: both ends at once is out of scope</text>
+<line x1="32" y1="310" x2="868" y2="310" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="330" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#8b9096" letter-spacing="0.6">A3</text>
+<text x="56" y="330" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600" fill="#e8e6e1">server intruder</text>
+<text x="32" y="344" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">stolen access</text>
+<rect x="200" y="327" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="330" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">what A1 sees: ciphertext, tags, hashes</text>
+<rect x="200" y="341" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="344" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">nothing to harvest in /var/log — it is empty</text>
+<rect x="552" y="327" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="330" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">plaintext: every envelope is sealed, 4096 B</text>
+<rect x="552" y="341" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="344" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">an author to trace — no column holds one</text>
+<line x1="32" y1="370" x2="868" y2="370" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="390" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#8b9096" letter-spacing="0.6">A4</text>
+<text x="56" y="390" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600" fill="#e8e6e1">infrastructure</text>
+<text x="32" y="404" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">hosting, nginx, kernel</text>
+<rect x="200" y="387" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="390" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">your IP at the network layer, and its timing</text>
+<rect x="200" y="401" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="404" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">how much traffic, how often, from where</text>
+<rect x="552" y="387" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="390" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">content: sealed, padded to 4096 B</text>
+<rect x="552" y="401" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="404" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">a stored identity to join the IP against</text>
+<line x1="32" y1="430" x2="868" y2="430" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="450" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600" fill="#8b9096" letter-spacing="0.6">A5</text>
+<text x="56" y="450" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600" fill="#e8e6e1">reader</text>
+<text x="32" y="464" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.4" font-weight="400" fill="#8b9096">infers from the text itself</text>
+<rect x="200" y="447" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="450" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">the text you wrote, its style, its details</text>
+<rect x="200" y="461" width="5" height="1" fill="#8b9096"/>
+<text x="211" y="464" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#e8e6e1">whatever the content says about itself</text>
+<rect x="552" y="447" width="5" height="1" fill="#1e2124"/>
+<text x="563" y="450" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="9.4" font-weight="400" fill="#8b9096">nothing — no claim: if the text describes itself, no fix</text>
+<line x1="32" y1="486" x2="868" y2="486" stroke="#1e2124" stroke-width="1"/>
+<text x="32" y="504" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.6" font-weight="400" fill="#8b9096">Out of scope: a global passive observer (both ends), device seizure, someone who knows you, legal compulsion.</text>
+<text x="868" y="504" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif" font-size="8.6" font-weight="400" fill="#8b9096" text-anchor="end">zifiri · docs/spec.md</text>
+</svg>

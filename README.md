@@ -8,8 +8,8 @@
   <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="680 tests" src="https://img.shields.io/badge/tests-680%20passing-brightgreen?style=flat-square">
-  <img alt="71 KiB gzip" src="https://img.shields.io/badge/bundle-71%20KiB%20gzip-blue?style=flat-square">
-  <img alt="11 claims" src="https://img.shields.io/badge/claims-11%20measured-yellow?style=flat-square">
+  <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
+  <img alt="49 claims" src="https://img.shields.io/badge/claims-49%20verified-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
 </p>
 
@@ -30,24 +30,33 @@ tell which one you wrote.
 Every claim below carries an ID, and every ID has a command that can refute it. If a claim
 cannot be checked, it does not belong in this file.
 
-## Sixty seconds
+<p align="center">
+  <img src="assets/terminal.svg" alt="make check, run on this repository" width="100%">
+</p>
 
-```bash
-git clone https://github.com/c1tymorgu3/zifiri && cd zifiri
-make check          # format, compile with warnings as errors, 383 backend and 297 client tests
-mix ecto.create && mix ecto.migrate && mix phx.server
-```
+## Where to start
 
-Open `http://localhost:4000`. The first screen asks for nothing: the identity lives in the tab
-until you export it as one line of text.
-
-## Three surfaces
-
-| Surface | What it is | Where it lives |
+| You are | Read | Then |
 |---|---|---|
-| **Rooms** | one public room, 500-message ring buffer, 15-minute retention | RAM only. No table, no file, no log line. Restart is a wipe |
-| **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a random 16-byte mailbox id | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
-| **Listings** | classifieds with plaintext title, price and category, and a padded body | `listings`, UTC day, non-unique `owner_hash` |
+| **Someone who might use it** | the three surfaces below | open an instance, post once |
+| **Someone who might run it** | [docs/spec.md](docs/spec.md) | `infra/` — one VPS, one compose file, one SQLite file |
+| **Someone who wants to break it** | [docs/claims.md](docs/claims.md) | [docs/verify.md](docs/verify.md) — one command per claim |
+
+<details>
+<summary><b>Table of contents</b></summary>
+
+- [What it looks like](#what-it-looks-like)
+- [Three surfaces](#three-surfaces)
+- [How a write travels](#how-a-write-travels)
+- [What it does not hide](#what-it-does-not-hide)
+- [Claims](#claims) and [check one yourself](#check-one-yourself)
+- [Why it is built this way](#why-it-is-built-this-way)
+- [Compared to](#compared-to)
+- [Questions](#questions)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+
+</details>
 
 ## What it looks like
 
@@ -60,17 +69,19 @@ until you export it as one line of text.
 
 <p align="center"><sub>Rooms, Messages and Listings on a phone, next to the same room on a desktop. Sample data.</sub></p>
 
-## What it does not hide
+## Three surfaces
 
-- On clearnet, the path in front of the application sees your IP. Run the onion service and it
-  does not.
-- An operator can recognise decoy traffic their own server generated. The design assumes they
-  comply and minimises what compliance yields: ciphertext and a list of hashes.
-- Content that describes its author defeats every design in this repository. No amount of
-  padding fixes a sentence that says where you work.
+| Surface | What it is | Where it lives |
+|---|---|---|
+| **Rooms** | one public room, 500-message ring buffer, 15-minute retention | RAM only. No table, no file, no log line. Restart is a wipe |
+| **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a random 16-byte mailbox id | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
+| **Listings** | classifieds with plaintext title, price and category, and a padded body | `listings`, UTC day, non-unique `owner_hash` |
 
-<details>
-<summary><b>How a write travels</b></summary>
+## How a write travels
+
+<p align="center">
+  <img src="assets/bucket.gif" alt="Three messages arrive, the bucket fills to 120, shuffles, publishes" width="100%">
+</p>
 
 ```
 browser                    server                      disk
@@ -87,28 +98,32 @@ The exchange is a challenge the server issued, bound to one body and one owner. 
 first use, so one solved nonce buys one write, not a season of them. Difficulty is 17 bits by
 default and rises with queue depth; the number comes from a measurement, not an estimate.
 
-</details>
+Deletion is the other half. Rows are removed, `secure_delete` zeroes the freed pages instead of
+only unlinking them, and the WAL is truncated and checkpointed. A canary written before the
+erase is unreadable in both the `.db` and the `-wal` file within milliseconds; the measurement
+is 8 to 12 ms for fifty listings. `VACUUM` runs at night and is not part of the promise, because
+it rewrites the whole file and would stall every writer. There are no tombstones and no
+backups: a backup is a copy you cannot delete.
 
-<details>
-<summary><b>How deletion actually deletes</b></summary>
+## What it does not hide
 
-Two clicks: erase token list, `DELETE`, done.
+<p align="center">
+  <img src="assets/threat-model.svg" alt="Five attacker classes: what each one sees and does not" width="100%">
+</p>
 
-Rows are removed, `secure_delete` zeroes the freed pages instead of only unlinking them, and
-the WAL is truncated and checkpointed. A canary written before the erase is unreadable in both
-the `.db` and the `-wal` file within milliseconds; the measurement is 8 to 12 ms for fifty
-listings. `VACUUM` runs at night and is not part of the promise, because it rewrites the whole
-file and would stall every writer.
-
-There are no tombstones and no backups. A backup is a copy you cannot delete.
-
-</details>
+- On clearnet, the path in front of the application sees your IP. Run the onion service and it
+  does not.
+- An operator can recognise decoy traffic their own server generated. The design assumes they
+  comply and minimises what compliance yields: ciphertext and a list of hashes.
+- Content that describes its author defeats every design in this repository. No amount of
+  padding fixes a sentence that says where you work.
 
 ## Claims
 
-Eleven claims, each with an ID and a test. [docs/claims.md](docs/claims.md) is the registry,
-[docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so they
-cannot drift apart.
+Forty-nine claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
+status. [docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so
+they cannot drift apart. The eleven below are the ones that decide whether you can be
+identified; the other thirty-eight are the mechanisms that keep them true.
 
 | ID | Claim |
 |---|---|
@@ -123,6 +138,106 @@ cannot drift apart.
 | C-09 | Erase leaves nothing readable on disk |
 | C-10 | The client makes no third-party request |
 | C-11 | The client bundle stays under 100 KiB gzip |
+
+### Check one yourself
+
+```bash
+make check                      # 383 backend tests, 0 failures
+make client                     # 297 client tests, then the bundle size check
+bash scripts/publish-gate.sh    # no secret, no placeholder, no TODO in the tree
+bash scripts/e2e/run.sh         # a real Chrome posts, reads and deletes against a live server
+```
+
+If any of those is not green on your machine, the claim it covers is not true for you. That is
+the point of writing them this way.
+
+## Why it is built this way
+
+Three decisions that shaped everything else, each with the alternative we threw away.
+
+**Buckets of 120, not a k-anonymity pool.** The first design collected five writers and
+published them together. It was a counter, not a set: five is not an anonymity set, and the
+product sat locked until the fifth stranger arrived. A ten-minute bucket filled with decoys
+gives 120 candidates whether one person posts or twenty. 120 is where the set is worth
+something: 99.2% at the measured rate.
+
+**SQLite, not Postgres.** Postgres writes faster and replicates, and it keeps deleted tuples
+until vacuum, keeps a WAL you archive, and keeps `pg_log` on by default. Every one of those is a
+place where the row you deleted still exists. The write profile here is bursty by design: the
+bucket collects for ten minutes and publishes once, so the single-writer limit never binds. p95 is
+50 ms at 200 concurrent writers.
+
+**`secure_delete` and a WAL truncate, not `VACUUM`.** Vacuum rewrites the whole file, which
+means it stalls every writer for as long as it runs, and it cannot be the thing a two-click
+delete depends on. Zeroing freed pages and truncating the WAL happens in milliseconds and holds
+under load. Vacuum still runs at night; it is maintenance, not the guarantee.
+
+## Compared to
+
+| | Account needed | Who you talked to | Delete means | Logs by default | Self-host |
+|---|---|---|---|---|---|
+| **zifiri** | none | no sender column exists | rows gone, pages zeroed, WAL truncated | none | yes, one SQLite file |
+| **Signal** | phone number | sealed sender; no directory of who talks to whom | messages expire on the device | minimal | no, server is not published |
+| **Matrix** | account on a homeserver | the homeserver sees sender and room | redaction, not erasure | homeserver keeps room state | yes |
+| **Tor forum** | often a handle | Tor hides your IP; the post still carries a handle and a time | moderator removes the post | usually yes | yes |
+| **A classic board** | account | full metadata, IP included | admin deletes the row, backups remain | yes | yes |
+
+<sub>Signal from its published sealed-sender spec, Matrix from the client-server spec, the
+classic board from stock phpBB defaults. Read their docs before quoting this table.</sub>
+
+## Questions
+
+<details>
+<summary><b>Is this Tor?</b></summary>
+
+No. It runs on clearnet and on an onion service at the same time. On clearnet the application
+never sees your IP, but nginx and the kernel do, so the claim narrows to "no identity". On
+onion, there is no IP to see. The claim follows the mode you are in.
+</details>
+
+<details>
+<summary><b>What happens if someone compels the operator?</b></summary>
+
+They get ciphertext, a list of HMAC'd owner hashes, and a bucket that says "120 arrived". There
+is no table that maps a row to a person because that table was never written. The operator's own
+anonymity is not part of the model. That is their problem to solve, and the design does not
+pretend otherwise.
+</details>
+
+<details>
+<summary><b>Can I run one for my town?</b></summary>
+
+Yes. One VPS, one compose file, one SQLite file on a LUKS volume. `infra/` has the nginx config,
+the Dockerfile, systemd units and a hardening script. There is no separate database process to
+keep alive and nothing to scale horizontally until you are past tens of thousands of writes a
+day.
+</details>
+
+<details>
+<summary><b>Why 120?</b></summary>
+
+Because the anonymity set is the product. 32 entries gives 96.9%, 120 gives 99.2%, 1000 gives
+99.9% — and 1000 entries every ten minutes is 345 MB of cover traffic a day per room. 120 is the
+point where the guarantee is real and the bill is still small. The arithmetic is in
+[docs/spec.md](docs/spec.md).
+</details>
+
+<details>
+<summary><b>Where do I lose my identity?</b></summary>
+
+In the 71-character string the browser generates on first load. It is never sent anywhere, and
+it is the only thing that can delete what you wrote. Lose it and the rows stay until their TTL,
+uneditable by you. That is a documented consequence, not a support ticket.
+</details>
+
+<details>
+<summary><b>Can an operator tell a decoy from a real message?</b></summary>
+
+Yes, and the threat model says so. Decoy bodies are generated server-side, so the operator knows
+which rows they wrote. The claim is not "indistinguishable to the operator"; it is
+"indistinguishable to anyone watching the wire, the disk, or a stolen backup": same size, same
+entropy, same publish instant.
+</details>
 
 ## Architecture
 
