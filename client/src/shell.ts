@@ -32,9 +32,9 @@ export interface Surface {
 
 /** The three surfaces, in rail order; the index is also the shortcut. */
 export const SURFACES: readonly Surface[] = [
-  { id: "rooms", label: "Odalar" },
-  { id: "messages", label: "Mesajlar" },
-  { id: "listings", label: "İlanlar" },
+  { id: "rooms", label: "Rooms" },
+  { id: "messages", label: "Messages" },
+  { id: "listings", label: "Listings" },
 ];
 
 export interface Identity {
@@ -68,7 +68,7 @@ export interface ShellOptions {
   readonly identity?: Identity | null;
   /** Opens the identity panel; without it the chip is a read-only indicator. */
   readonly onIdentity?: () => void;
-  /** A small honest label next to the identity, e.g. "örnek veri" in demo. */
+  /** A small honest label next to the identity, e.g. "sample data" in demo. */
   readonly badge?: string | null;
 }
 
@@ -147,13 +147,13 @@ function isEditable(target: EventTarget | null): boolean {
 
 function assertSurfaces(surfaces: readonly Surface[]): void {
   if (surfaces.length === 0) {
-    throw new ShellError("en az bir yüzey gerekir", "no_surfaces");
+    throw new ShellError("at least one surface is required", "no_surfaces");
   }
 
   const seen = new Set<string>();
   for (const surface of surfaces) {
     if (seen.has(surface.id)) {
-      throw new ShellError(`yüzey iki kez tanımlı: ${surface.id}`, "duplicate_surface");
+      throw new ShellError(`surface defined twice: ${surface.id}`, "duplicate_surface");
     }
     seen.add(surface.id);
   }
@@ -168,14 +168,14 @@ let shellCount = 0;
  */
 export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
   const doc = root.ownerDocument ?? (typeof document === "undefined" ? null : document);
-  if (doc === null) throw new ShellError("renderShell bir belge gerektirir", "no_document");
+  if (doc === null) throw new ShellError("renderShell requires a document", "no_document");
 
   const surfaces = options.surfaces ?? SURFACES;
   assertSurfaces(surfaces);
 
   const initial = surfaces.find((surface) => surface.id === options.active);
   if (initial === undefined) {
-    throw new ShellError(`bilinmeyen yüzey: ${options.active}`, "unknown_active");
+    throw new ShellError(`unknown surface: ${options.active}`, "unknown_active");
   }
 
   shellCount += 1;
@@ -190,11 +190,11 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
   const skip = doc.createElement("a");
   skip.className = "zf-skip";
   skip.setAttribute("href", `#${contentId}`);
-  skip.textContent = "İçeriğe geç";
+  skip.textContent = "Skip to content";
 
   const nav = doc.createElement("nav");
   nav.className = "zf-rail";
-  nav.setAttribute("aria-label", "Yüzeyler");
+  nav.setAttribute("aria-label", "Surfaces");
 
   const list = doc.createElement("ul");
   list.className = "zf-rail-list";
@@ -205,7 +205,7 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
     if (id === current) return;
     const surface = surfaces.find((candidate) => candidate.id === id);
     if (surface === undefined) {
-      throw new ShellError(`bilinmeyen yüzey: ${id}`, "unknown_surface");
+      throw new ShellError(`unknown surface: ${id}`, "unknown_surface");
     }
     setActive(surface.id);
     options.onNavigate(surface.id);
@@ -243,7 +243,7 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
   brand.className = "zf-brand";
   brand.append(
     span(doc, "zf-brand-name", "zifiri"),
-    span(doc, "zf-brand-line", "anonim tahta · hesap yok"),
+    span(doc, "zf-brand-line", "anonymous board · no account"),
   );
   topbar.append(brand);
 
@@ -257,13 +257,13 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
   identityBlock.className = "zf-identity";
   identityBlock.setAttribute("data-state", "none");
 
-  const identityLabel = span(doc, "zf-identity-label", "kimlik");
+  const identityLabel = span(doc, "zf-identity-label", "identity");
   const identityValue = span(doc, "zf-identity-value", "—");
   identityBlock.append(identityLabel, identityValue);
 
   if (options.onIdentity !== undefined) {
     (identityBlock as HTMLButtonElement).type = "button";
-    identityBlock.setAttribute("aria-label", "kimliği aç");
+    identityBlock.setAttribute("aria-label", "open identity");
     identityBlock.addEventListener("click", () => options.onIdentity?.());
   }
 
@@ -294,7 +294,7 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
 
   function setActive(id: SurfaceId): void {
     if (!buttons.has(id)) {
-      throw new ShellError(`bilinmeyen yüzey: ${id}`, "unknown_surface");
+      throw new ShellError(`unknown surface: ${id}`, "unknown_surface");
     }
     current = id;
     shell.setAttribute("data-active", id);

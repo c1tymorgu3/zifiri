@@ -23,8 +23,8 @@ const MINUTE = 60_000;
 
 function room(overrides: Partial<RoomSummary> = {}): RoomSummary {
   return {
-    id: "genel",
-    name: "genel",
+    id: "general",
+    name: "general",
     lastActivityAt: NOW,
     unread: 0,
     presence: false,
@@ -33,7 +33,7 @@ function room(overrides: Partial<RoomSummary> = {}): RoomSummary {
 }
 
 function message(overrides: Partial<RoomMessage> = {}): RoomMessage {
-  return { id: "m1", body: "merhaba", at: NOW, ...overrides };
+  return { id: "m1", body: "hello", at: NOW, ...overrides };
 }
 
 // ---------------------------------------------------------------------------
@@ -244,17 +244,17 @@ describe("sortRooms", () => {
 
 describe("relativeTime", () => {
   it("reads under a minute as now", () => {
-    expect(relativeTime(NOW - 30_000, NOW)).toBe("şimdi");
+    expect(relativeTime(NOW - 30_000, NOW)).toBe("now");
   });
 
   it("counts minutes, hours and days", () => {
-    expect(relativeTime(NOW - 3 * MINUTE, NOW)).toBe("3 dk");
-    expect(relativeTime(NOW - 2 * 60 * MINUTE, NOW)).toBe("2 sa");
-    expect(relativeTime(NOW - 4 * 24 * 60 * MINUTE, NOW)).toBe("4 g");
+    expect(relativeTime(NOW - 3 * MINUTE, NOW)).toBe("3 min");
+    expect(relativeTime(NOW - 2 * 60 * MINUTE, NOW)).toBe("2 h");
+    expect(relativeTime(NOW - 4 * 24 * 60 * MINUTE, NOW)).toBe("4 d");
   });
 
   it("never shows a negative age when the clock runs backwards", () => {
-    expect(relativeTime(NOW + MINUTE, NOW)).toBe("şimdi");
+    expect(relativeTime(NOW + MINUTE, NOW)).toBe("now");
   });
 });
 
@@ -285,7 +285,7 @@ describe("renderRoomList", () => {
       room({ lastActivityAt: NOW - 3 * MINUTE }),
     ], { now: NOW, activeId: null });
 
-    expect(one(host, "zf-room-time").textContent).toBe("3 dk");
+    expect(one(host, "zf-room-time").textContent).toBe("3 min");
     expect(one(host, "zf-room-time").getAttribute("datetime")).toBe(
       new Date(NOW - 3 * MINUTE).toISOString(),
     );
@@ -301,7 +301,7 @@ describe("renderRoomList", () => {
     expect(count(host, "zf-room-unread")).toBe(1);
     expect(one(host, "zf-room-unread").text()).toContain("4");
     // The word is in the DOM for a screen reader, not only a colour.
-    expect(one(host, "zf-room-unread").text()).toContain("okunmamış");
+    expect(one(host, "zf-room-unread").text()).toContain("unread");
   });
 
   it("draws a presence dot only when presence is on", () => {
@@ -312,7 +312,7 @@ describe("renderRoomList", () => {
     ], { now: NOW, activeId: null });
 
     expect(count(host, "zf-room-dot")).toBe(1);
-    expect(one(host, "zf-room-dot").getAttribute("aria-label")).toBe("şu an açık");
+    expect(one(host, "zf-room-dot").getAttribute("aria-label")).toBe("active now");
   });
 
   it("marks exactly one row as the current room", () => {
@@ -338,14 +338,14 @@ describe("renderRoomList", () => {
   it("opens a room when its row is clicked", () => {
     const host = root();
     const opened: string[] = [];
-    renderRoomList(host as unknown as HTMLElement, [room({ id: "genel" })], {
+    renderRoomList(host as unknown as HTMLElement, [room({ id: "general" })], {
       now: NOW,
       activeId: null,
       onSelect: (id) => opened.push(id),
     });
 
     one(host, "zf-room").fire("click");
-    expect(opened).toEqual(["genel"]);
+    expect(opened).toEqual(["general"]);
   });
 });
 
@@ -353,10 +353,10 @@ describe("renderMessageStream", () => {
   it("draws the body and a mono clock, and nothing that identifies the writer", () => {
     const host = root();
     renderMessageStream(host as unknown as HTMLElement, [
-      message({ body: "köprü kapalı mı", at: new Date(2026, 10, 22, 14, 3).getTime() }),
+      message({ body: "is the bridge closed", at: new Date(2026, 10, 22, 14, 3).getTime() }),
     ]);
 
-    expect(one(host, "zf-msg-body").textContent).toBe("köprü kapalı mı");
+    expect(one(host, "zf-msg-body").textContent).toBe("is the bridge closed");
     expect(one(host, "zf-msg-clock").textContent).toBe("14:03");
     expect(count(host, "zf-msg")).toBe(1);
     // No avatar slot, no name slot: the product has neither.
@@ -374,7 +374,7 @@ describe("renderMessageStream", () => {
 
 describe("composer", () => {
   it("starts in the default mode with the matching sentence", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
     expect(DEFAULT_MODE).toBe("silent");
     expect(h.view.mode()).toBe("silent");
@@ -388,7 +388,7 @@ describe("composer", () => {
   });
 
   it("changes the sentence when the mode changes", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
     const silent = one(h.mount, "zf-consequence").textContent;
 
     radio(h.mount, "fast").checked = true;
@@ -397,27 +397,27 @@ describe("composer", () => {
     const fast = one(h.mount, "zf-consequence").textContent;
     expect(h.view.mode()).toBe("fast");
     expect(fast).toBe(describeMode("fast"));
-    expect(fast).toContain("hemen");
+    expect(fast).toContain("at once");
     expect(fast).not.toBe(silent);
   });
 
   it("shows the silent wait and the queue only in silent mode", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()], pending: 2 });
+    const h = harness({ activeRoomId: "general", rooms: [room()], pending: 2 });
 
     const pending = one(h.mount, "zf-pending");
     expect(pending.hasAttribute("hidden")).toBe(false);
     expect(pending.textContent).toContain(SILENT_WAIT);
-    expect(pending.textContent).toContain("2 bekliyor");
+    expect(pending.textContent).toContain("2 waiting");
 
     h.view.setPending(0);
-    expect(one(h.mount, "zf-pending").textContent).toContain("bekleyen yok");
+    expect(one(h.mount, "zf-pending").textContent).toContain("nothing waiting");
 
     h.view.setMode("fast");
     expect(one(h.mount, "zf-pending").hasAttribute("hidden")).toBe(true);
   });
 
   it("counts characters against the limit", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
     expect(one(h.mount, "zf-counter").textContent).toBe(`0 / ${CHAR_LIMIT}`);
 
@@ -426,7 +426,7 @@ describe("composer", () => {
   });
 
   it("counts code points, not UTF-16 units", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
     // Two emoji are two characters to the writer and four units to JavaScript.
     h.view.setValue("\u{1F600}\u{1F600}");
@@ -435,7 +435,7 @@ describe("composer", () => {
   });
 
   it("allows exactly the limit and blocks one character more", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
     const send = one(h.mount, "zf-send");
 
     h.view.setValue("a".repeat(CHAR_LIMIT));
@@ -444,34 +444,34 @@ describe("composer", () => {
     expect(send.hasAttribute("disabled")).toBe(false);
 
     h.view.setValue("a".repeat(CHAR_LIMIT + 1));
-    expect(one(h.mount, "zf-counter").textContent).toContain("1 fazla");
+    expect(one(h.mount, "zf-counter").textContent).toContain("1 over");
     expect(one(h.mount, "zf-counter").getAttribute("data-state")).toBe("over");
     expect(send.hasAttribute("disabled")).toBe(true);
   });
 
   it("sends the body with the room and the mode, then clears the field", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
-    h.view.setValue("  köprü kapalı mı  ");
+    h.view.setValue("  is the bridge closed  ");
     h.view.form.fire("submit");
 
-    expect(h.sent).toEqual([{ roomId: "genel", body: "köprü kapalı mı", mode: "silent" }]);
+    expect(h.sent).toEqual([{ roomId: "general", body: "is the bridge closed", mode: "silent" }]);
     expect(h.view.value()).toBe("");
     expect(one(h.mount, "zf-counter").textContent).toBe(`0 / ${CHAR_LIMIT}`);
   });
 
   it("sends in the mode that is on screen", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
     h.view.setMode("fast");
-    h.view.setValue("selam");
+    h.view.setValue("hello");
     h.view.send();
 
-    expect(h.sent).toEqual([{ roomId: "genel", body: "selam", mode: "fast" }]);
+    expect(h.sent).toEqual([{ roomId: "general", body: "hello", mode: "fast" }]);
   });
 
   it("refuses an empty draft", () => {
-    const h = harness({ activeRoomId: "genel", rooms: [room()] });
+    const h = harness({ activeRoomId: "general", rooms: [room()] });
 
     h.view.setValue("   ");
     h.view.form.fire("submit");
@@ -483,7 +483,7 @@ describe("composer", () => {
   it("refuses to send when no room is open", () => {
     const h = harness({ rooms: [room()] });
 
-    h.view.setValue("selam");
+    h.view.setValue("hello");
     h.view.form.fire("submit");
 
     expect(h.sent).toEqual([]);
@@ -494,32 +494,32 @@ describe("composer", () => {
 
 describe("room selection", () => {
   it("opens a room and keeps the composer usable", () => {
-    const h = harness({ rooms: [room({ id: "genel", name: "genel" })] });
+    const h = harness({ rooms: [room({ id: "general", name: "general" })] });
 
-    expect(one(h.mount, "zf-room-title").textContent).toBe("Oda seçilmedi");
+    expect(one(h.mount, "zf-room-title").textContent).toBe("No room selected");
 
-    h.view.setRoom("genel");
+    h.view.setRoom("general");
 
-    expect(one(h.mount, "zf-room-title").textContent).toBe("genel");
-    expect(one(h.mount, "zf-room-sub").textContent).toBe("son mesaj şimdi");
+    expect(one(h.mount, "zf-room-title").textContent).toBe("general");
+    expect(one(h.mount, "zf-room-sub").textContent).toBe("last message now");
     expect(one(h.mount, "zf-composer").hasAttribute("hidden")).toBe(false);
 
-    h.view.setValue("selam");
+    h.view.setValue("hello");
     expect(one(h.mount, "zf-send").hasAttribute("disabled")).toBe(false);
   });
 
   it("reports a room click back to the caller", () => {
-    const h = harness({ rooms: [room({ id: "genel" })] });
+    const h = harness({ rooms: [room({ id: "general" })] });
 
     one(h.mount, "zf-room").fire("click");
 
-    expect(h.opened).toEqual(["genel"]);
+    expect(h.opened).toEqual(["general"]);
   });
 
   it("draws messages for the open room", () => {
     const h = harness({
-      activeRoomId: "genel",
-      rooms: [room({ id: "genel" })],
+      activeRoomId: "general",
+      rooms: [room({ id: "general" })],
       messages: [message({ body: "bir", at: NOW }), message({ id: "m2", body: "iki", at: NOW + 1000 })],
     });
 

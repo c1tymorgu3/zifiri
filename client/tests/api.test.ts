@@ -80,9 +80,9 @@ describe("challenge", () => {
 
 describe("listings", () => {
   const input = {
-    title: "Bisiklet",
-    body: "Temiz, iki yıl kullanıldı.",
-    category: "spor",
+    title: "Bicycle",
+    body: "Clean, used for two years.",
+    category: "transport",
     ownerToken: TOKEN,
     challengeId: "ch-1",
     nonce: 4242,
@@ -104,10 +104,10 @@ describe("listings", () => {
     expect(body.owner_token).toBeUndefined();
     expect(body.owner).toBeUndefined();
     expect(body.token).toBeUndefined();
-    expect(body.title).toBe("Bisiklet");
+    expect(body.title).toBe("Bicycle");
     expect(body.price_cents).toBe(150000);
     expect(body.currency).toBe("TRY");
-    expect(body.category).toBe("spor");
+    expect(body.category).toBe("transport");
     expect(body.challenge_id).toBe("ch-1");
     expect(body.nonce).toBe(4242);
     expect(body.bits).toBe(18);
@@ -131,14 +131,14 @@ describe("listings", () => {
   it("lists with q, category, before and limit — never a token", async () => {
     reply({ listings: [] });
 
-    await listListings({ q: "bisiklet", category: "spor", before: 99, limit: 20 });
+    await listListings({ q: "bicycle", category: "transport", before: 99, limit: 20 });
 
     const { url, headers } = call();
     const [path, query] = url.split("?");
     expect(path).toBe("/api/listings");
     const params = new URLSearchParams(query);
-    expect(params.get("q")).toBe("bisiklet");
-    expect(params.get("category")).toBe("spor");
+    expect(params.get("q")).toBe("bicycle");
+    expect(params.get("category")).toBe("transport");
     expect(params.get("before")).toBe("99");
     expect(params.get("limit")).toBe("20");
     expect(url).not.toContain(TOKEN_B64);
@@ -156,7 +156,7 @@ describe("listings", () => {
   it("fetches one listing and unwraps it", async () => {
     const listing = {
       ref: 5,
-      title: "Masa",
+      title: "Table",
       price_cents: 90000,
       currency: "TRY",
       category: "ev",
@@ -256,7 +256,7 @@ describe("rooms", () => {
 
   it("posts a message with url-safe base64 fields", async () => {
     reply({ status: "accepted", ref: 1, epoch: "e1" }, 202);
-    const body = new TextEncoder().encode("selam");
+    const body = new TextEncoder().encode("hello");
     const pubkey = new Uint8Array(32).fill(1);
     const sig = new Uint8Array(64).fill(2);
 

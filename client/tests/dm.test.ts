@@ -100,7 +100,7 @@ function harness(overrides: Partial<DmDeps> = {}): Harness {
 function envelope(overrides: Partial<MailboxEnvelope> = {}): MailboxEnvelope {
   return {
     id: "x1",
-    body: sealBody(ME, "merhaba"),
+    body: sealBody(ME, "hello"),
     expiresAt: NOW + 1000,
     ...overrides,
   };
@@ -158,7 +158,7 @@ function thread(overrides: Partial<DmThread> = {}): DmThread {
     lastText: "",
     lastAt: 0,
     unread: 0,
-    presence: "bilinmiyor",
+    presence: "unknown",
     ...overrides,
   };
 }
@@ -168,7 +168,7 @@ function thread(overrides: Partial<DmThread> = {}): DmThread {
 describe("send", () => {
   it("seals, delivers, and shows the message as sent with no unread", async () => {
     const h = harness();
-    const message = await h.dm.send(PEER_A, "selam");
+    const message = await h.dm.send(PEER_A, "hello");
 
     expect(h.delivered).toHaveLength(1);
     expect(h.mailbox).toHaveLength(0);
@@ -177,7 +177,7 @@ describe("send", () => {
 
     const [only] = h.dm.threads();
     expect(only?.peer).toBe(hex(PEER_A));
-    expect(only?.lastText).toBe("selam");
+    expect(only?.lastText).toBe("hello");
     expect(only?.unread).toBe(0);
     expect(unreadCount(h.dm.threads())).toBe(0);
   });
@@ -223,7 +223,7 @@ describe("pull", () => {
 
   it("skips a decoy addressed to someone else without throwing", async () => {
     const h = harness();
-    h.mailbox.push({ id: "d1", body: sealBody(PEER_B, "sana değil"), expiresAt: NOW + 1000 });
+    h.mailbox.push({ id: "d1", body: sealBody(PEER_B, "not for you"), expiresAt: NOW + 1000 });
 
     const result = await h.dm.pull();
 
@@ -285,7 +285,7 @@ describe("pull", () => {
     for (let i = 0; i < 119; i += 1) {
       h.mailbox.push({ id: `d${i}`, body: sealBody(PEER_B, "decoy"), expiresAt: NOW + 1000 });
     }
-    h.mailbox.push({ id: "real", body: sealBody(ME, "gerçek"), expiresAt: NOW + 1000 });
+    h.mailbox.push({ id: "real", body: sealBody(ME, "real"), expiresAt: NOW + 1000 });
 
     const result = await h.dm.pull();
 
@@ -332,7 +332,7 @@ describe("presence", () => {
     const request = vi.fn(async () => ({ lastSeen: NOW }));
     const label = await presenceState(PEER_A, false, request, () => NOW);
 
-    expect(label).toBe("bilinmiyor");
+    expect(label).toBe("unknown");
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -346,21 +346,21 @@ describe("presence", () => {
 
     const label = await h.dm.presenceState(PEER_A, false);
 
-    expect(label).toBe("bilinmiyor");
+    expect(label).toBe("unknown");
     expect(h.presenceCalls).toBe(0);
   });
 
-  it("says çevrimiçi when the peer was seen inside the window", async () => {
+  it("says online when the peer was seen inside the window", async () => {
     const label = await presenceState(PEER_A, true, async () => ({ lastSeen: NOW - 60_000 }), () => NOW);
-    expect(label).toBe("çevrimiçi");
+    expect(label).toBe("online");
   });
 
-  it("says 5+ dk when the last sighting is older than five minutes", async () => {
+  it("says 5+ min when the last sighting is older than five minutes", async () => {
     const label = await presenceState(PEER_A, true, async () => ({ lastSeen: NOW - 6 * 60_000 }), () => NOW);
-    expect(label).toBe("5+ dk");
+    expect(label).toBe("5+ min");
   });
 
-  it("falls back to bilinmiyor when the probe fails or answers nothing", async () => {
+  it("falls back to unknown when the probe fails or answers nothing", async () => {
     const failing = await presenceState(
       PEER_A,
       true,
@@ -371,18 +371,18 @@ describe("presence", () => {
     );
     const empty = await presenceState(PEER_A, true, async () => null, () => NOW);
 
-    expect(failing).toBe("bilinmiyor");
-    expect(empty).toBe("bilinmiyor");
+    expect(failing).toBe("unknown");
+    expect(empty).toBe("unknown");
   });
 
   it("stores the label on the existing thread when asked", async () => {
     const h = harness({ presence: () => ({ lastSeen: NOW }) });
-    await h.dm.send(PEER_A, "selam");
+    await h.dm.send(PEER_A, "hello");
 
     const label = await h.dm.presenceState(PEER_A, true);
 
-    expect(label).toBe("çevrimiçi");
-    expect(h.dm.threads()[0]?.presence).toBe("çevrimiçi");
+    expect(label).toBe("online");
+    expect(h.dm.threads()[0]?.presence).toBe("online");
   });
 });
 
@@ -397,7 +397,7 @@ describe("identity label", () => {
   });
 
   it("collapses whitespace and truncates a long preview", () => {
-    expect(summarize("  iki\n satır  ")).toBe("iki satır");
+    expect(summarize("  two\n lines  ")).toBe("two lines");
     const long = "a".repeat(200);
     expect(summarize(long, 10)).toBe(`${"a".repeat(9)}…`);
   });
@@ -408,7 +408,7 @@ describe("renderDm", () => {
     const root = fakeRoot();
     renderDm(root as unknown as HTMLElement, []);
 
-    expect(root.allText()).toContain("Henüz kimseyle konuşmadın");
+    expect(root.allText()).toContain("You have not talked to anyone yet");
     expect(root.classNames()).toContain("empty");
   });
 
@@ -416,16 +416,16 @@ describe("renderDm", () => {
     const root = fakeRoot();
     const label = formatPeerFingerprint(peerFingerprint(PEER_A));
     renderDm(root as unknown as HTMLElement, [
-      thread({ lastText: "son mesaj", unread: 2, presence: "çevrimiçi" }),
+      thread({ lastText: "last message", unread: 2, presence: "online" }),
     ]);
 
     const list = root.children[0];
     const button = list?.children[0]?.children[0];
     expect(button?.dataset.peer).toBe(hex(PEER_A));
     expect(button?.children[0]?.textContent).toBe(label);
-    expect(button?.children[1]?.textContent).toBe("son mesaj");
-    expect(button?.children[2]?.textContent).toBe("çevrimiçi");
-    expect(button?.children[3]?.textContent).toBe("2 okunmamış");
+    expect(button?.children[1]?.textContent).toBe("last message");
+    expect(button?.children[2]?.textContent).toBe("online");
+    expect(button?.children[3]?.textContent).toBe("2 unread");
     expect(root.allText()).not.toContain(hex(PEER_A));
   });
 
@@ -444,6 +444,6 @@ describe("renderDm", () => {
 
     const button = root.children[0]?.children[0]?.children[0];
     expect(button?.children).toHaveLength(3);
-    expect(root.allText()).not.toContain("okunmamış");
+    expect(root.allText()).not.toContain("unread");
   });
 });

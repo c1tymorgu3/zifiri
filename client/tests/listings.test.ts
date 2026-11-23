@@ -15,22 +15,22 @@ import {
 function listing(overrides: Partial<ListingItem> = {}): ListingItem {
   return {
     id: "l1",
-    title: "Ahşap masa",
-    body: "İki sandalyeyle birlikte, az kullanıldı.",
+    title: "Wooden table",
+    body: "Comes with two chairs, barely used.",
     price: 250000,
     currency: "TRY",
-    category: "ev",
+    category: "home",
     day: "2026-11-22",
     ...overrides,
   };
 }
 
 describe("fold", () => {
-  it("collapses the four Turkish i's into one letter", () => {
-    expect(fold("İSTANBUL")).toBe("istanbul");
-    expect(fold("ISTANBUL")).toBe("istanbul");
-    expect(fold("ıstanbul")).toBe("istanbul");
-    expect(fold("istanbul")).toBe("istanbul");
+  it("collapses cases and accents into one letter", () => {
+    expect(fold("CAFÉ")).toBe("cafe");
+    expect(fold("Cafe")).toBe("cafe");
+    expect(fold("cafe")).toBe("cafe");
+    expect(fold("CAFÉ")).toBe("cafe");
   });
 });
 
@@ -42,36 +42,36 @@ describe("filterListings", () => {
     expect(result).not.toBe(items);
   });
 
-  it("matches İ and ı regardless of which one the query uses", () => {
-    const istanbul = listing({ id: "a", title: "İSTANBUL'da kiralık masa" });
-    const kirmizi = listing({ id: "b", title: "KIRMIZI bisiklet", body: "18 vites" });
+  it("matches an accented word whichever spelling the query uses", () => {
+    const cafe = listing({ id: "a", title: "Table for a cafe" });
+    const red = listing({ id: "b", title: "RED bicycle", body: "18 gears" });
 
-    expect(filterListings([istanbul, kirmizi], { q: "istanbul" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings([istanbul, kirmizi], { q: "ıstanbul" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings([istanbul, kirmizi], { q: "kırmızı" }).map((l) => l.id)).toEqual(["b"]);
-    expect(filterListings([istanbul, kirmizi], { q: "KIRMIZI" }).map((l) => l.id)).toEqual(["b"]);
+    expect(filterListings([cafe, red], { q: "cafe" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings([cafe, red], { q: "CAFÉ" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings([cafe, red], { q: "red" }).map((l) => l.id)).toEqual(["b"]);
+    expect(filterListings([cafe, red], { q: "RED" }).map((l) => l.id)).toEqual(["b"]);
   });
 
-  it("folds the other Turkish letters so an ASCII keyboard still finds the listing", () => {
-    const items = [listing({ id: "a", title: "Gül fidanı" }), listing({ id: "b", title: "Çelik tencere" })];
-    expect(filterListings(items, { q: "gul" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings(items, { q: "celik" }).map((l) => l.id)).toEqual(["b"]);
-    expect(filterListings(items, { q: "GÜL" }).map((l) => l.id)).toEqual(["a"]);
+  it("folds the remaining diacritics so an ASCII keyboard still finds the listing", () => {
+    const items = [listing({ id: "a", title: "Café table" }), listing({ id: "b", title: "Naïve print" })];
+    expect(filterListings(items, { q: "cafe" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings(items, { q: "naive" }).map((l) => l.id)).toEqual(["b"]);
+    expect(filterListings(items, { q: "CAFÉ" }).map((l) => l.id)).toEqual(["a"]);
   });
 
   it("requires every word of a multi-word query, in any order", () => {
-    const both = listing({ id: "a", title: "Ahşap masa", body: "ceviz, iki sandalye" });
-    const onlyOne = listing({ id: "b", title: "Ahşap raf", body: "duvar rafı" });
+    const both = listing({ id: "a", title: "Wooden table", body: "walnut, two chairs" });
+    const onlyOne = listing({ id: "b", title: "Wooden shelf", body: "wall shelf" });
 
-    expect(filterListings([both, onlyOne], { q: "masa ahşap" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings([both, onlyOne], { q: "  ahşap   masa " }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings([both, onlyOne], { q: "masa sandalye" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings([both, onlyOne], { q: "masa bisiklet" })).toEqual([]);
+    expect(filterListings([both, onlyOne], { q: "table wooden" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings([both, onlyOne], { q: "  wooden   table " }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings([both, onlyOne], { q: "table chairs" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings([both, onlyOne], { q: "table bicycle" })).toEqual([]);
   });
 
   it("searches the body as well as the title", () => {
-    const items = [listing({ id: "a", title: "Masa", body: "ceviz kaplama" })];
-    expect(filterListings(items, { q: "ceviz" }).map((l) => l.id)).toEqual(["a"]);
+    const items = [listing({ id: "a", title: "Table", body: "walnut veneer" })];
+    expect(filterListings(items, { q: "walnut" }).map((l) => l.id)).toEqual(["a"]);
   });
 
   it("keeps both ends of the price range inclusive", () => {
@@ -97,56 +97,56 @@ describe("filterListings", () => {
 
   it("filters by category, accepting the display label as well as the slug", () => {
     const items = [
-      listing({ id: "a", category: "elektronik" }),
-      listing({ id: "b", category: "ev" }),
-      listing({ id: "c", category: "is" }),
+      listing({ id: "a", category: "electronics" }),
+      listing({ id: "b", category: "home" }),
+      listing({ id: "c", category: "work" }),
     ];
-    expect(filterListings(items, { category: "elektronik" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings(items, { category: "Elektronik" }).map((l) => l.id)).toEqual(["a"]);
-    expect(filterListings(items, { category: "İş" }).map((l) => l.id)).toEqual(["c"]);
+    expect(filterListings(items, { category: "electronics" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings(items, { category: "Electronics" }).map((l) => l.id)).toEqual(["a"]);
+    expect(filterListings(items, { category: "Work" }).map((l) => l.id)).toEqual(["c"]);
     expect(filterListings(items, { category: "" })).toHaveLength(3);
   });
 
   it("combines query, category and price without widening the result", () => {
     const items = [
-      listing({ id: "a", title: "Masa", category: "ev", price: 20000 }),
-      listing({ id: "b", title: "Masa", category: "ev", price: 90000 }),
-      listing({ id: "c", title: "Masa", category: "is", price: 20000 }),
+      listing({ id: "a", title: "Table", category: "home", price: 20000 }),
+      listing({ id: "b", title: "Table", category: "home", price: 90000 }),
+      listing({ id: "c", title: "Table", category: "work", price: 20000 }),
     ];
-    expect(filterListings(items, { q: "masa", category: "ev", maxPrice: 50000 }).map((l) => l.id)).toEqual([
+    expect(filterListings(items, { q: "table", category: "home", maxPrice: 50000 }).map((l) => l.id)).toEqual([
       "a",
     ]);
   });
 
   it("returns an empty array when nothing matches", () => {
-    expect(filterListings([listing()], { q: "kayık" })).toEqual([]);
+    expect(filterListings([listing()], { q: "kayak" })).toEqual([]);
   });
 });
 
 describe("formatPrice", () => {
-  it("formats kuruş as Turkish lira", () => {
+  it("formats cents as Turkish lira", () => {
     const text = formatPrice(123456, "TRY");
-    expect(text).toContain("1.234,56");
+    expect(text).toContain("1,234.56");
     expect(text).toContain("₺");
   });
 
   it("prints zero without inventing a price", () => {
-    expect(formatPrice(0, "TRY")).toContain("0,00");
+    expect(formatPrice(0, "TRY")).toContain("0.00");
   });
 
-  it("says takas when the price is null or absent", () => {
-    expect(formatPrice(null, "TRY")).toBe("takas");
-    expect(formatPrice(undefined, "TRY")).toBe("takas");
+  it("says trade when the price is null or absent", () => {
+    expect(formatPrice(null, "TRY")).toBe("trade");
+    expect(formatPrice(undefined, "TRY")).toBe("trade");
   });
 
   it("honours the requested currency", () => {
     const text = formatPrice(1234, "USD");
-    expect(text).toContain("12,34");
+    expect(text).toContain("12.34");
     expect(text).not.toContain("₺");
   });
 
   it("defaults to lira", () => {
-    expect(formatPrice(500)).toContain("5,00");
+    expect(formatPrice(500)).toContain("5.00");
   });
 });
 
@@ -210,7 +210,7 @@ function render(items: ListingItem[], onOpen: (id: string) => void = () => {}): 
 
 describe("renderListings", () => {
   it("shows title, price, category and day — four fields, nothing more", () => {
-    const root = render([listing({ title: "Ahşap masa", price: 250000, category: "ev", day: "2026-11-22" })]);
+    const root = render([listing({ title: "Wooden table", price: 250000, category: "home", day: "2026-11-22" })]);
 
     const button = root.children[0]?.children[0]?.children[0];
     expect(button?.className).toBe("listing");
@@ -222,28 +222,28 @@ describe("renderListings", () => {
       "listing-day",
     ]);
     expect(button?.children.map((child) => child.textContent)).toEqual([
-      "Ahşap masa",
+      "Wooden table",
       formatPrice(250000, "TRY"),
-      CATEGORY_LABELS.ev,
+      CATEGORY_LABELS.home,
       "2026-11-22",
     ]);
   });
 
   it("has no seller field to render, even if the object carries one", () => {
-    const leaky: ListingItem & { seller: string } = { ...listing(), seller: "Ahmet Yılmaz" };
+    const leaky: ListingItem & { seller: string } = { ...listing(), seller: "Mert Yilmaz" };
     const root = render([leaky]);
 
-    expect(root.allText()).not.toContain("Ahmet");
-    expect(root.classNames().some((name) => /seller|satici|satıcı/i.test(name))).toBe(false);
-    expect(root.allText().toLowerCase()).not.toContain("satıcı");
+    expect(root.allText()).not.toContain("Mert");
+    expect(root.classNames().some((name) => /seller/i.test(name))).toBe(false);
+    expect(root.allText().toLowerCase()).not.toContain("seller");
   });
 
-  it("says takas for a barter listing and marks it as such", () => {
+  it("says trade for a barter listing and marks it as such", () => {
     const root = render([listing({ price: null })]);
     const price = root.children[0]?.children[0]?.children[0]?.children[1];
 
-    expect(price?.textContent).toBe("takas");
-    expect(price?.className).toBe("listing-price takas");
+    expect(price?.textContent).toBe("trade");
+    expect(price?.className).toBe("listing-price trade");
   });
 
   it("renders an empty state instead of an empty list", () => {
@@ -252,7 +252,7 @@ describe("renderListings", () => {
     expect(root.children).toHaveLength(1);
     expect(root.children[0]?.tagName).toBe("p");
     expect(root.children[0]?.className).toBe("empty");
-    expect(root.allText()).toBe("Henüz ilan yok.");
+    expect(root.allText()).toBe("No listings yet.");
   });
 
   it("opens the listing that was clicked", () => {
@@ -274,19 +274,19 @@ describe("renderListings", () => {
 
   it("marks a missing day as unknown rather than showing a blank", () => {
     const root = render([listing({ day: "" })]);
-    expect(root.children[0]?.children[0]?.children[0]?.children[3]?.textContent).toBe("bilinmiyor");
+    expect(root.children[0]?.children[0]?.children[0]?.children[3]?.textContent).toBe("unknown");
   });
 });
 
 describe("composeListing", () => {
-  const valid = { title: "Masa", body: "Ceviz masa.", price: 10000, category: "ev" };
+  const valid = { title: "Table", body: "Walnut table.", price: 10000, category: "home" };
 
   it("accepts a draft at both length limits", () => {
     const result = composeListing({
       title: "a".repeat(MAX_TITLE),
       body: "b".repeat(MAX_BODY),
       price: 0,
-      category: "elektronik",
+      category: "electronics",
     });
 
     expect(result.ok).toBe(true);
@@ -294,27 +294,27 @@ describe("composeListing", () => {
     expect([...result.value.title]).toHaveLength(MAX_TITLE);
     expect([...result.value.body]).toHaveLength(MAX_BODY);
     expect(result.value.price).toBe(0);
-    expect(result.value.category).toBe("elektronik");
+    expect(result.value.category).toBe("electronics");
   });
 
   it("trims the title and the body", () => {
-    const result = composeListing({ ...valid, title: "  Masa  ", body: "\n ceviz masa \n" });
+    const result = composeListing({ ...valid, title: "  Table  ", body: "\n walnut table \n" });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.title).toBe("Masa");
-    expect(result.value.body).toBe("ceviz masa");
+    expect(result.value.title).toBe("Table");
+    expect(result.value.body).toBe("walnut table");
   });
 
   it("rejects a title one character over the limit without echoing it", () => {
-    const result = composeListing({ ...valid, title: "GİZLİ-BAŞLIK ".repeat(10) });
+    const result = composeListing({ ...valid, title: "SECRET-TITLE ".repeat(10) });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues.map((issue) => issue.field)).toEqual(["title"]);
     expect(result.issues[0]?.code).toBe("too_long");
-    expect(result.issues[0]?.message).toContain("Başlık");
-    expect(result.issues[0]?.message).not.toContain("GİZLİ");
+    expect(result.issues[0]?.message).toContain("Title");
+    expect(result.issues[0]?.message).not.toContain("SECRET");
   });
 
   it("rejects a body one character over the limit without echoing it", () => {
@@ -324,7 +324,7 @@ describe("composeListing", () => {
     if (result.ok) return;
     expect(result.issues.map((issue) => issue.field)).toEqual(["body"]);
     expect(result.issues[0]?.code).toBe("too_long");
-    expect(result.issues[0]?.message).toContain("Gövde");
+    expect(result.issues[0]?.message).toContain("Body");
     expect(result.issues[0]?.message).not.toContain("xxxx");
   });
 
@@ -337,7 +337,7 @@ describe("composeListing", () => {
     expect(result.issues.every((issue) => issue.code === "empty")).toBe(true);
   });
 
-  it("treats a null price as takas", () => {
+  it("treats a null price as trade", () => {
     const result = composeListing({ ...valid, price: null });
 
     expect(result.ok).toBe(true);
@@ -352,7 +352,7 @@ describe("composeListing", () => {
     if (result.ok) return;
     expect(result.issues[0]?.field).toBe("price");
     expect(result.issues[0]?.code).toBe("negative");
-    expect(result.issues[0]?.message).toContain("Fiyat");
+    expect(result.issues[0]?.message).toContain("Price");
     expect(result.issues[0]?.message).not.toContain("1234");
   });
 
@@ -361,7 +361,7 @@ describe("composeListing", () => {
     expect(composeListing({ ...valid, price: Number.POSITIVE_INFINITY }).ok).toBe(false);
   });
 
-  it("rejects fractional kuruş", () => {
+  it("rejects fractional cents", () => {
     const result = composeListing({ ...valid, price: 12.5 });
 
     expect(result.ok).toBe(false);
@@ -371,21 +371,21 @@ describe("composeListing", () => {
   });
 
   it("rejects a category outside the list", () => {
-    const result = composeListing({ ...valid, category: "silah" });
+    const result = composeListing({ ...valid, category: "weapon" });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues[0]?.field).toBe("category");
     expect(result.issues[0]?.code).toBe("unknown_category");
-    expect(result.issues[0]?.message).not.toContain("silah");
+    expect(result.issues[0]?.message).not.toContain("weapon");
   });
 
   it("accepts a category typed as its display label", () => {
-    const result = composeListing({ ...valid, category: "Elektronik" });
+    const result = composeListing({ ...valid, category: "Electronics" });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.category).toBe("elektronik");
+    expect(result.value.category).toBe("electronics");
   });
 
   it("reports every problem at once, each with its field", () => {
@@ -393,7 +393,7 @@ describe("composeListing", () => {
       title: "",
       body: "x".repeat(MAX_BODY + 1),
       price: -1,
-      category: "yok",
+      category: "nope",
     });
 
     expect(result.ok).toBe(false);
@@ -403,16 +403,16 @@ describe("composeListing", () => {
 });
 
 describe("groupByCategory", () => {
-  it("groups in first-seen order with Turkish labels", () => {
+  it("groups in first-seen order with English labels", () => {
     const items = [
-      listing({ id: "a", category: "elektronik" }),
-      listing({ id: "b", category: "ev" }),
-      listing({ id: "c", category: "elektronik" }),
+      listing({ id: "a", category: "electronics" }),
+      listing({ id: "b", category: "home" }),
+      listing({ id: "c", category: "electronics" }),
     ];
 
     const groups = groupByCategory(items);
-    expect(groups.map((group) => group.category)).toEqual(["elektronik", "ev"]);
-    expect(groups.map((group) => group.label)).toEqual(["Elektronik", "Ev ve yaşam"]);
+    expect(groups.map((group) => group.category)).toEqual(["electronics", "home"]);
+    expect(groups.map((group) => group.label)).toEqual(["Electronics", "Home"]);
     expect(groups[0]?.items.map((item) => item.id)).toEqual(["a", "c"]);
   });
 
@@ -421,7 +421,7 @@ describe("groupByCategory", () => {
   });
 
   it("keeps an unknown or missing category in its own group instead of guessing", () => {
-    const groups = groupByCategory([listing({ category: "gizli" }), listing({ category: "" })]);
-    expect(groups.map((group) => group.category)).toEqual(["gizli", "bilinmiyor"]);
+    const groups = groupByCategory([listing({ category: "hidden" }), listing({ category: "" })]);
+    expect(groups.map((group) => group.category)).toEqual(["hidden", "unknown"]);
   });
 });

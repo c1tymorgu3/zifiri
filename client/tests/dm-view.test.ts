@@ -33,7 +33,7 @@ function message(overrides: Partial<DmMessage> = {}): DmMessage {
   return {
     id: "m1",
     peer: PEER_A_ID,
-    text: "merhaba",
+    text: "hello",
     at: NOW,
     self: false,
     unread: true,
@@ -49,7 +49,7 @@ function thread(overrides: Partial<DmThread> = {}): DmThread {
     lastText: "",
     lastAt: 0,
     unread: 0,
-    presence: "bilinmiyor",
+    presence: "unknown",
     ...overrides,
   };
 }
@@ -200,30 +200,30 @@ async function settle(): Promise<void> {
 describe("presence", () => {
   it("makes no request at all while it is off", async () => {
     const h = harness();
-    h.view.setThreads([thread({ messages: [message()], lastText: "merhaba", lastAt: NOW })]);
+    h.view.setThreads([thread({ messages: [message()], lastText: "hello", lastAt: NOW })]);
 
     const label = await h.view.select(PEER_A_ID);
     await h.view.refreshPresence();
     await h.view.setPresenceEnabled(false);
 
-    expect(label).toBe("bilinmiyor");
+    expect(label).toBe("unknown");
     expect(h.probes).toHaveLength(0);
-    expect(h.view.state().presence).toBe("bilinmiyor");
-    expect(one(h.mount, "dm-presence-text").textContent).toBe("bilinmiyor");
+    expect(h.view.state().presence).toBe("unknown");
+    expect(one(h.mount, "dm-presence-text").textContent).toBe("unknown");
     expect(all(h.mount, "dm-dot")).toHaveLength(0);
   });
 
   it("probes once per open conversation when the user turns it on", async () => {
     const h = harness({ presenceEnabled: true });
     h.view.setThreads([
-      thread({ messages: [message()], lastText: "merhaba", lastAt: NOW }),
-      thread({ peer: PEER_B_ID, peerKey: PEER_B, messages: [message()], lastText: "selam" }),
+      thread({ messages: [message()], lastText: "hello", lastAt: NOW }),
+      thread({ peer: PEER_B_ID, peerKey: PEER_B, messages: [message()], lastText: "hello" }),
     ]);
 
     await h.view.select(PEER_A_ID);
     expect(h.probes).toHaveLength(1);
-    expect(h.view.state().presence).toBe("çevrimiçi");
-    expect(one(h.mount, "dm-presence-text").textContent).toBe("çevrimiçi");
+    expect(h.view.state().presence).toBe("online");
+    expect(one(h.mount, "dm-presence-text").textContent).toBe("online");
     expect(one(h.mount, "dm-dot").className).toContain("dm-dot--ok");
 
     await h.view.select(PEER_B_ID);
@@ -232,7 +232,7 @@ describe("presence", () => {
 
   it("drops the dot and the cached label when switched off", async () => {
     const h = harness({ presenceEnabled: true });
-    h.view.setThreads([thread({ messages: [message()], lastText: "merhaba" })]);
+    h.view.setThreads([thread({ messages: [message()], lastText: "hello" })]);
     await h.view.select(PEER_A_ID);
     expect(all(h.mount, "dm-dot").length).toBeGreaterThan(0);
 
@@ -241,19 +241,19 @@ describe("presence", () => {
 
     expect(h.probes).toHaveLength(1);
     expect(all(h.mount, "dm-dot")).toHaveLength(0);
-    expect(one(h.mount, "dm-presence-text").textContent).toBe("bilinmiyor");
+    expect(one(h.mount, "dm-presence-text").textContent).toBe("unknown");
   });
 
-  it("reads a stale peer as \"5+ dk\" and pairs the dot with the word", async () => {
+  it("reads a stale peer as \"5+ min\" and pairs the dot with the word", async () => {
     const h = harness({ presenceEnabled: true });
     h.reading = { lastSeen: NOW - 20 * 60_000 };
     h.view.setThreads([thread()]);
 
     const label = await h.view.select(PEER_A_ID);
 
-    expect(label).toBe("5+ dk");
+    expect(label).toBe("5+ min");
     expect(one(h.mount, "dm-dot").className).toContain("dm-dot--idle");
-    expect(one(h.mount, "dm-presence-text").textContent).toBe("5+ dk");
+    expect(one(h.mount, "dm-presence-text").textContent).toBe("5+ min");
   });
 });
 
@@ -281,9 +281,9 @@ describe("conversation list", () => {
     expect(rows).toHaveLength(2);
     expect(one(rows[0] as FakeEl, "dm-fp").textContent).toBe(fp(PEER_A));
     expect(one(rows[0] as FakeEl, "dm-preview").textContent).toBe("gelen");
-    expect(one(rows[0] as FakeEl, "dm-when").textContent).toBe("3 dk");
+    expect(one(rows[0] as FakeEl, "dm-when").textContent).toBe("3 min");
     expect(one(rows[0] as FakeEl, "dm-unread").textContent).toBe("2");
-    expect(one(rows[0] as FakeEl, "dm-unread").getAttribute("aria-label")).toBe("2 okunmamış");
+    expect(one(rows[0] as FakeEl, "dm-unread").getAttribute("aria-label")).toBe("2 unread");
     expect(h.view.state().unread).toBe(3);
   });
 
@@ -305,8 +305,8 @@ describe("conversation list", () => {
   it("explains an empty list in one sentence", () => {
     const h = harness();
     h.view.setThreads([]);
-    expect(one(h.mount, "dm-empty").textContent).toBe("Henüz kimseyle konuşmadın.");
-    expect(one(h.mount, "dm-pick").textContent).toContain("soldan bir satır seç");
+    expect(one(h.mount, "dm-empty").textContent).toBe("You have not talked to anyone yet.");
+    expect(one(h.mount, "dm-pick").textContent).toContain("Pick a row on the left");
   });
 
   it("drops the selection when its thread disappears", () => {
@@ -376,26 +376,26 @@ describe("composer", () => {
     h.view.setThreads([thread()]);
     await h.view.select(PEER_A_ID);
 
-    h.view.setDraft("  selam  ");
+    h.view.setDraft("  hello  ");
     expect(one(h.mount, "dm-count").textContent).toBe("9 / " + MAX_BODY);
     expect(one(h.mount, "dm-send").disabled).toBe(false);
 
     expect(await h.view.submit()).toBe(true);
-    expect(h.sent).toEqual([{ peer: PEER_A_ID, text: "selam", mode: "sessiz" }]);
+    expect(h.sent).toEqual([{ peer: PEER_A_ID, text: "hello", mode: "silent" }]);
     expect(h.view.state().draft).toBe("");
     expect(one(h.mount, "dm-count").textContent).toBe("0 / " + MAX_BODY);
-    expect(one(h.mount, "dm-status").textContent).toBe("Gönderildi.");
+    expect(one(h.mount, "dm-status").textContent).toBe("Sent.");
   });
 
   it("keeps the draft when the transport rejects", async () => {
     const h = harness({ fail: true });
     h.view.setThreads([thread()]);
     await h.view.select(PEER_A_ID);
-    h.view.setDraft("kaybolmasın");
+    h.view.setDraft("do not lose it");
 
     expect(await h.view.submit()).toBe(false);
-    expect(h.view.state().draft).toBe("kaybolmasın");
-    expect(one(h.mount, "dm-status").textContent).toContain("Gönderilemedi");
+    expect(h.view.state().draft).toBe("do not lose it");
+    expect(one(h.mount, "dm-status").textContent).toContain("Could not send");
   });
 
   it("caps the draft at MAX_BODY", () => {
@@ -412,36 +412,36 @@ describe("mode switch", () => {
     h.view.setThreads([thread()]);
     await h.view.select(PEER_A_ID);
 
-    expect(h.view.state().mode).toBe("sessiz");
-    expect(one(h.mount, "dm-mode-note").textContent).toContain("%99");
-    expect(one(h.mount, "dm-mode-note").textContent).toContain("10 dakikalık");
+    expect(h.view.state().mode).toBe("silent");
+    expect(one(h.mount, "dm-mode-note").textContent).toContain("~99%");
+    expect(one(h.mount, "dm-mode-note").textContent).toContain("10-minute");
   });
 
-  it("asks once before Hızlı, and only changes on the yes", async () => {
+  it("asks once before fast, and only changes on the yes", async () => {
     const h = harness();
     h.view.setThreads([thread()]);
     await h.view.select(PEER_A_ID);
 
-    h.view.setMode("hizli");
-    expect(h.view.state().mode).toBe("sessiz");
+    h.view.setMode("fast");
+    expect(h.view.state().mode).toBe("silent");
     expect(h.view.state().askMode).toBe(true);
     expect(one(h.mount, "dm-mode-ask").hidden).toBe(false);
-    expect(one(h.mount, "dm-mode-ask-text").textContent).toContain("Hızlı mod");
+    expect(one(h.mount, "dm-mode-ask-text").textContent).toContain("Fast mode");
 
     h.view.cancelFastMode();
     expect(h.view.state().askMode).toBe(false);
-    expect(h.view.state().mode).toBe("sessiz");
+    expect(h.view.state().mode).toBe("silent");
     expect(one(h.mount, "dm-mode-ask").hidden).toBe(true);
 
-    h.view.setMode("hizli");
+    h.view.setMode("fast");
     h.view.confirmFastMode();
-    expect(h.view.state().mode).toBe("hizli");
-    expect(one(h.mount, "dm-mode-note").textContent).toContain("%80");
+    expect(h.view.state().mode).toBe("fast");
+    expect(one(h.mount, "dm-mode-note").textContent).toContain("~80%");
 
     // Asked once: going back and forth does not ask again.
-    h.view.setMode("sessiz");
-    h.view.setMode("hizli");
-    expect(h.view.state().mode).toBe("hizli");
+    h.view.setMode("silent");
+    h.view.setMode("fast");
+    expect(h.view.state().mode).toBe("fast");
     expect(h.view.state().askMode).toBe(false);
   });
 
@@ -449,12 +449,12 @@ describe("mode switch", () => {
     const h = harness();
     h.view.setThreads([thread()]);
     await h.view.select(PEER_A_ID);
-    h.view.setMode("hizli");
+    h.view.setMode("fast");
     h.view.confirmFastMode();
-    h.view.setDraft("hemen");
+    h.view.setDraft("now");
 
     expect(await h.view.submit()).toBe(true);
-    expect(h.sent[0]?.mode).toBe("hizli");
+    expect(h.sent[0]?.mode).toBe("fast");
   });
 });
 
@@ -464,12 +464,12 @@ describe("loading", () => {
     h.view.setLoading(true);
 
     expect(all(h.mount, "dm-skeleton")).toHaveLength(3);
-    expect(h.mount.text()).toContain("Konuşmalar yükleniyor.");
+    expect(h.mount.text()).toContain("Loading conversations.");
     expect(h.view.state().loading).toBe(true);
 
     h.view.setLoading(false);
     expect(all(h.mount, "dm-skeleton")).toHaveLength(0);
-    expect(one(h.mount, "dm-empty").textContent).toBe("Henüz kimseyle konuşmadın.");
+    expect(one(h.mount, "dm-empty").textContent).toBe("You have not talked to anyone yet.");
   });
 });
 
@@ -477,11 +477,11 @@ describe("time labels", () => {
   it("formats a clock and relative time without inventing values", () => {
     expect(clockLabel(0)).toBe("--:--");
     expect(clockLabel(NOW)).toMatch(/^\d{2}:\d{2}$/);
-    expect(relativeLabel(NOW, NOW)).toBe("şimdi");
-    expect(relativeLabel(NOW - 59_000, NOW)).toBe("şimdi");
-    expect(relativeLabel(NOW - 3 * 60_000, NOW)).toBe("3 dk");
-    expect(relativeLabel(NOW - 2 * 3_600_000, NOW)).toBe("2 sa");
-    expect(relativeLabel(NOW - 4 * 86_400_000, NOW)).toBe("4 g");
+    expect(relativeLabel(NOW, NOW)).toBe("now");
+    expect(relativeLabel(NOW - 59_000, NOW)).toBe("now");
+    expect(relativeLabel(NOW - 3 * 60_000, NOW)).toBe("3 min");
+    expect(relativeLabel(NOW - 2 * 3_600_000, NOW)).toBe("2 h");
+    expect(relativeLabel(NOW - 4 * 86_400_000, NOW)).toBe("4 d");
     expect(relativeLabel(0, NOW)).toBe("");
   });
 });

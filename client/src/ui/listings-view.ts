@@ -1,16 +1,18 @@
 /**
- * İlanlar yüzeyi — Operate.
+ * Listings surface — Operate.
  *
- * Bir ilan kalıcı ve herkese açık; bu yüzden iddia dar: arkasında hesap, IP,
- * e-posta yok. Bunun arayüzdeki karşılığı tek bir yokluk — satıcı bloğu yok,
- * çünkü satıcı alanı yok. `renderListingDetail` de, satır da yalnız
- * `ListingItem`'ın bildirdiği alanları okur.
+ * A listing is permanent and public, so the claim it makes is a narrow one:
+ * there is no account, IP or e-mail behind it. Its shape in the interface is a
+ * single absence — no seller block, because there is no seller field. Both
+ * `renderListingDetail` and the row read only the fields `ListingItem`
+ * declares.
  *
- * Her metin `textContent` ile girer. Gövde yabancı girdidir; bu dosyada
- * `innerHTML` geçmez.
+ * Every string goes in through `textContent`. The body is foreign input; there
+ * is no `innerHTML` in this file.
  *
- * Üç yüzey tek kabukta: liste (filtre çubuğu + satırlar), detay, form. Ağ
- * çağrısı yok — yayınlama, 1:1 köprüsü ve kapatma çağırana devredilir.
+ * Three panels in one shell: list (filter bar plus rows), detail, form. No
+ * network call — publishing, the 1:1 bridge and closing a listing are handed
+ * to the caller.
  */
 import "../styles/listings.css";
 import {
@@ -29,7 +31,7 @@ import {
   type ListingValue,
 } from "./listings";
 
-/** Sahiplik başlığı. Doluysa ilan bu cihaza ait; boşsa değil. */
+/** Ownership header. Non-empty means the listing belongs to this device. */
 export const OWNER_HEADER = "x-zifiri-owner";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -39,33 +41,34 @@ function count(text: string): number {
 }
 
 /**
- * Sahiplik bir dizedir, bir bayrak değil: başlık yoksa, boşsa ya da yalnız
- * boşluksa ilan bu cihaza ait değildir ve "İlanı kapat" hiç çizilmez.
+ * Ownership is a string, not a flag: if the header is missing, empty or only
+ * whitespace, the listing does not belong to this device and "Close listing"
+ * is never drawn.
  */
 export function hasOwnerToken(token: string | null | undefined): boolean {
   return typeof token === "string" && token.trim().length > 0;
 }
 
-/* ------------------------------------------------------------------ fiyat */
+/* ------------------------------------------------------------------ price */
 
 export type PriceParse = { readonly ok: true; readonly cents: number | null } | { readonly ok: false };
 
 /**
- * Türkçe yazım: "." binlik, "," kuruş. "1.250,50" → 125050. Boş alan takas
- * demektir (null), geçersiz metin hata. Virgülden sonra en fazla iki hane;
- * "12.34" reddedilir çünkü Türkçe okunuşu 1234 değil, belirsizdir.
+ * English spelling: "," groups thousands, "." is the decimal point.
+ * "1,250.50" → 125050. An empty field means trade (null); invalid text is an
+ * error. At most two decimals; "12.34" reads as twelve point three four.
  */
-const PRICE_SHAPE = /^(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?$/;
+const PRICE_SHAPE = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/;
 
 export function parsePrice(text: string): PriceParse {
   const raw = text.replace(/[\s\u00a0\u20ba]/g, "").replace(/tl$/i, "");
   if (raw === "") return { ok: true, cents: null };
   if (!PRICE_SHAPE.test(raw)) return { ok: false };
 
-  const parts = raw.split(",");
+  const parts = raw.split(".");
   const whole = parts[0] ?? "0";
   const frac = parts[1] ?? "";
-  const lira = Number(whole.replace(/\./g, ""));
+  const lira = Number(whole.replace(/,/g, ""));
   const kurus = Number(frac.padEnd(2, "0"));
   if (!Number.isSafeInteger(lira) || !Number.isSafeInteger(kurus)) return { ok: false };
 
@@ -86,7 +89,7 @@ export function emptyFilterForm(): FilterForm {
   return { q: "", category: "", min: "", max: "" };
 }
 
-/** Sınır alanları geçersizse sessizce yok sayılır; filtre genişlemez. */
+/** A bound that does not parse is silently dropped; the filter never widens. */
 export function filterFromForm(form: FilterForm): ListingFilter {
   const filter: ListingFilter = {};
 
@@ -112,12 +115,12 @@ export function isFilterActive(filter: ListingFilter): boolean {
   );
 }
 
-/** Boşluk bir bilgidir: neden boş olduğunu tek cümleyle söyler. */
+/** Emptiness is information: it says why it is empty in one sentence. */
 export function emptyMessage(active: boolean): string {
-  return active ? "Bu filtreye uyan ilan yok. Filtreyi gevşet." : "Henüz ilan yok. İlk ilanı sen ver.";
+  return active ? "No listing matches this filter. Loosen it." : "No listings yet. Post the first one.";
 }
 
-/** Mobilde çubuk katlanır; masaüstünde sınıf yok sayılır (CSS). */
+/** The bar folds on mobile; on desktop the class is ignored (CSS). */
 export function filtersBodyClass(open: boolean): string {
   return `listings-filters-body ${open ? "is-open" : "is-collapsed"}`;
 }
@@ -168,7 +171,7 @@ export function renderListingDetail(
   back.type = "button";
   back.className = "listing-back";
   back.dataset.role = "back";
-  back.textContent = "Geri";
+  back.textContent = "Back";
   back.addEventListener("click", () => options.onBack?.());
   article.append(back);
 
@@ -181,7 +184,7 @@ export function renderListingDetail(
   meta.className = "detail-meta";
 
   const price = doc.createElement("span");
-  price.className = item.price === null ? "listing-price takas" : "listing-price";
+  price.className = item.price === null ? "listing-price trade" : "listing-price";
   price.textContent = formatPrice(item.price, item.currency);
 
   const chip = doc.createElement("span");
@@ -191,7 +194,7 @@ export function renderListingDetail(
   const day = doc.createElement("time");
   day.className = "detail-day";
   const dayText = item.day.trim();
-  day.textContent = dayText === "" ? "bilinmiyor" : dayText;
+  day.textContent = dayText === "" ? "unknown" : dayText;
   if (ISO_DAY.test(dayText)) day.setAttribute("datetime", dayText);
 
   meta.append(price, chip, day);
@@ -209,17 +212,17 @@ export function renderListingDetail(
   message.type = "button";
   message.className = "btn-primary";
   message.dataset.role = "message";
-  message.textContent = "Mesaj gönder";
+  message.textContent = "Send message";
   message.addEventListener("click", () => options.onMessage?.(item));
   actions.append(message);
 
-  // Yalnız sahipse çizilir. Sahip değilse düğme yok — gizli değil, yok.
+  // Drawn only for the owner. Otherwise there is no button — not hidden, absent.
   if (hasOwnerToken(options.ownerToken)) {
     const close = doc.createElement("button");
     close.type = "button";
     close.className = "btn-danger";
     close.dataset.role = "close";
-    close.textContent = "İlanı kapat";
+    close.textContent = "Close listing";
     close.addEventListener("click", () => options.onClose?.(item));
     actions.append(close);
   }
@@ -234,32 +237,32 @@ export interface ComposeFields {
   title: string;
   body: string;
   price: string;
-  takas: boolean;
+  trade: boolean;
   category: string;
 }
 
 export function emptyComposeFields(): ComposeFields {
-  return { title: "", body: "", price: "", takas: false, category: "" };
+  return { title: "", body: "", price: "", trade: false, category: "" };
 }
 
 export type DraftBuild = { readonly ok: true; readonly value: ListingValue } | { readonly ok: false; readonly issues: readonly ListingIssue[] };
 
 /**
- * Form alanlarından doğrulanmış bir ilan. Fiyat alanı metindir; burada
- * kuruşa çevrilir, sonra `composeListing` tek karar mercii olarak çalışır.
- * Hata metinleri girdiyi yansıtmaz (bkz. `composeListing`).
+ * A validated listing from the form fields. The price field is text; it is
+ * turned into cents here, then `composeListing` runs as the single authority.
+ * Error copy never echoes the input (see `composeListing`).
  */
 export function draftFromFields(fields: ComposeFields): DraftBuild {
   const issues: ListingIssue[] = [];
   let price: number | null = null;
 
-  if (!fields.takas) {
+  if (!fields.trade) {
     const parsed = parsePrice(fields.price);
     if (!parsed.ok) {
       issues.push({
         field: "price",
         code: "not_a_number",
-        message: "Fiyat sayı olmalı. Takas için takas seçeneğini işaretle.",
+        message: "Price must be a number. Tick trade if you want to trade.",
       });
     } else {
       price = parsed.cents;
@@ -273,8 +276,8 @@ export function draftFromFields(fields: ComposeFields): DraftBuild {
     category: fields.category,
   });
 
-  // Fiyat okunamadıysa ilan yayınlanmaz: sessizce takasa düşmek, yazılanı
-  // yok saymak olurdu.
+  // An unreadable price blocks publication: falling back to trade would ignore
+  // what the writer typed.
   if (issues.length > 0) return { ok: false, issues };
   if (composed.ok) return { ok: true, value: composed.value };
   return { ok: false, issues: composed.issues };
@@ -282,15 +285,15 @@ export function draftFromFields(fields: ComposeFields): DraftBuild {
 
 /**
  * Error copy: the reason in one sentence, the next step in another.
- * `composeListing` nedeni söyler; adım burada eklenir, çünkü adım yüzeye
- * aittir (aynı neden başka yerde başka bir çıkış isteyebilir).
+ * `composeListing` names the reason; the step is added here, because the step
+ * belongs to the surface (the same reason may want another exit elsewhere).
  */
 const NEXT_STEP: Record<string, string> = {
-  empty: "Doldur.",
-  too_long: "Kısalt.",
-  not_a_number: "Sayı yaz ya da takası işaretle.",
-  negative: "Sıfır ya da üstü yaz.",
-  unknown_category: "Listeden seç.",
+  empty: "Fill it in.",
+  too_long: "Shorten it.",
+  not_a_number: "Type a number, or tick trade.",
+  negative: "Enter zero or more.",
+  unknown_category: "Pick one from the list.",
 };
 
 export function withNextStep(issue: ListingIssue): string {
@@ -352,8 +355,8 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
     return label;
   };
 
-  // Başlık — sayaç sınırı görünür kılar, engellemez: yapıştırılan metin
-  // kesilmez, sınır aşılınca söylenir.
+  // Title — the counter makes the limit visible without blocking: pasted text
+  // is not cut, the limit is reported once it is crossed.
   const title = doc.createElement("input");
   title.type = "text";
   title.className = "field-input";
@@ -377,7 +380,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   });
   syncTitle();
 
-  field("Başlık", "title", title).append(titleCount);
+  field("Title", "title", title).append(titleCount);
 
   const body = doc.createElement("textarea");
   body.className = "field-input field-area";
@@ -401,7 +404,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   });
   syncBody();
 
-  field("Gövde", "body", body).append(bodyCount);
+  field("Body", "body", body).append(bodyCount);
 
   const price = doc.createElement("input");
   price.type = "text";
@@ -410,49 +413,49 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   price.dataset.field = "price";
   price.setAttribute("inputmode", "decimal");
   price.setAttribute("autocomplete", "off");
-  price.setAttribute("placeholder", "0,00");
+  price.setAttribute("placeholder", "0.00");
   price.addEventListener("input", () => {
     fields.price = price.value;
   });
 
-  const takas = doc.createElement("input");
-  takas.type = "checkbox";
-  takas.className = "field-check";
-  takas.dataset.field = "takas";
-  takas.checked = fields.takas;
+  const trade = doc.createElement("input");
+  trade.type = "checkbox";
+  trade.className = "field-check";
+  trade.dataset.field = "trade";
+  trade.checked = fields.trade;
 
-  const takasLabel = doc.createElement("label");
-  takasLabel.className = "field-check-label";
-  const takasText = doc.createElement("span");
-  takasText.textContent = "Takas";
-  takasLabel.append(takas, takasText);
+  const tradeLabel = doc.createElement("label");
+  tradeLabel.className = "field-check-label";
+  const tradeText = doc.createElement("span");
+  tradeText.textContent = "Trade";
+  tradeLabel.append(trade, tradeText);
 
-  const applyTakas = (): void => {
-    fields.takas = takas.checked;
-    price.disabled = takas.checked;
+  const applyTrade = (): void => {
+    fields.trade = trade.checked;
+    price.disabled = trade.checked;
   };
-  takas.addEventListener("change", applyTakas);
-  applyTakas();
+  trade.addEventListener("change", applyTrade);
+  applyTrade();
 
   const priceLabel = doc.createElement("label");
   priceLabel.className = "field";
   const priceCaption = doc.createElement("span");
   priceCaption.className = "field-label";
-  priceCaption.textContent = "Fiyat (₺)";
+  priceCaption.textContent = "Price (₺)";
   priceLabel.append(priceCaption, price);
   inputs.set("price", price);
   form.append(priceLabel, errorFor("price"));
 
-  // Takas kendi satırında, fiyat etiketinin dışında: etiket içinde etiket
-  // olmaz, ve işaretlenince ne olacağı tek cümleyle yazılır.
-  const takasHint = doc.createElement("span");
-  takasHint.className = "field-hint";
-  takasHint.textContent = "Fiyat alanı kapanır.";
+  // Trade sits on its own row, outside the price label: a label inside a label
+  // is invalid, and one sentence says what ticking it does.
+  const tradeHint = doc.createElement("span");
+  tradeHint.className = "field-hint";
+  tradeHint.textContent = "The price field closes.";
 
-  const takasRow = doc.createElement("div");
-  takasRow.className = "field-row";
-  takasRow.append(takasLabel, takasHint);
-  form.append(takasRow);
+  const tradeRow = doc.createElement("div");
+  tradeRow.className = "field-row";
+  tradeRow.append(tradeLabel, tradeHint);
+  form.append(tradeRow);
 
   const category = doc.createElement("select");
   category.className = "field-input";
@@ -460,7 +463,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
 
   const blank = doc.createElement("option");
   blank.value = "";
-  blank.textContent = "Kategori seç";
+  blank.textContent = "Choose a category";
   category.append(blank);
 
   for (const slug of LISTING_CATEGORIES) {
@@ -474,7 +477,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
     fields.category = category.value;
   });
 
-  field("Kategori", "category", category);
+  field("Category", "category", category);
 
   const actions = doc.createElement("div");
   actions.className = "detail-actions";
@@ -483,13 +486,13 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   submit.type = "submit";
   submit.className = "btn-primary";
   submit.dataset.role = "publish";
-  submit.textContent = "İlanı yayınla";
+  submit.textContent = "Publish listing";
 
   const cancel = doc.createElement("button");
   cancel.type = "button";
   cancel.className = "btn-quiet";
   cancel.dataset.role = "cancel";
-  cancel.textContent = "Vazgeç";
+  cancel.textContent = "Cancel";
   cancel.addEventListener("click", () => options.onCancel?.());
 
   actions.append(submit, cancel);
@@ -530,7 +533,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   };
 }
 
-/* ------------------------------------------------------------------- kabuk */
+/* ------------------------------------------------------------------- shell */
 
 export interface ListingsViewOptions {
   ownerToken?: string | null;
@@ -564,13 +567,13 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
 
   const heading = doc.createElement("h2");
   heading.className = "listings-heading";
-  heading.textContent = "İlanlar";
+  heading.textContent = "Listings";
 
   const newButton = doc.createElement("button");
   newButton.type = "button";
   newButton.className = "btn-primary";
   newButton.dataset.role = "new";
-  newButton.textContent = "İlan ver";
+  newButton.textContent = "New listing";
 
   head.append(heading, newButton);
 
@@ -587,7 +590,7 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   toggle.className = "listings-filters-toggle";
   toggle.dataset.role = "filters-toggle";
   toggle.setAttribute("aria-expanded", "false");
-  toggle.textContent = "Filtre";
+  toggle.textContent = "Filter";
 
   const filterBody = doc.createElement("div");
   filterBody.className = filtersBodyClass(false);
@@ -611,7 +614,7 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   search.className = "field-input";
   search.dataset.field = "q";
   search.setAttribute("autocomplete", "off");
-  search.setAttribute("placeholder", "Başlık ya da gövde");
+  search.setAttribute("placeholder", "Title or body");
   search.addEventListener("input", () => {
     filter.q = search.value;
     refresh();
@@ -622,7 +625,7 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   category.dataset.field = "category";
   const all = doc.createElement("option");
   all.value = "";
-  all.textContent = "Tüm kategoriler";
+  all.textContent = "All categories";
   category.append(all);
   for (const slug of LISTING_CATEGORIES) {
     const option = doc.createElement("option");
@@ -641,7 +644,7 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   min.dataset.field = "min";
   min.setAttribute("inputmode", "decimal");
   min.setAttribute("autocomplete", "off");
-  min.setAttribute("placeholder", "En az");
+  min.setAttribute("placeholder", "Min");
   min.addEventListener("input", () => {
     filter.min = min.value;
     refresh();
@@ -653,24 +656,24 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   max.dataset.field = "max";
   max.setAttribute("inputmode", "decimal");
   max.setAttribute("autocomplete", "off");
-  max.setAttribute("placeholder", "En çok");
+  max.setAttribute("placeholder", "Max");
   max.addEventListener("input", () => {
     filter.max = max.value;
     refresh();
   });
 
   filterBody.append(
-    filterField("Ara", "q", search),
-    filterField("Kategori", "category", category),
-    filterField("En az fiyat", "min", min),
-    filterField("En çok fiyat", "max", max),
+    filterField("Search", "q", search),
+    filterField("Category", "category", category),
+    filterField("Min price", "min", min),
+    filterField("Max price", "max", max),
   );
 
   toggle.addEventListener("click", () => {
     const open = filterBody.className.includes("is-open") === false;
     filterBody.className = filtersBodyClass(open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    toggle.textContent = open ? "Filtreyi kapat" : "Filtre";
+    toggle.textContent = open ? "Close filters" : "Filter";
   });
 
   filterBar.append(toggle, filterBody);
@@ -701,7 +704,7 @@ export function createListingsView(mount: HTMLElement, options: ListingsViewOpti
   const refresh = (): void => {
     const active = filterFromForm(filter);
     const visible = filterListings(items, active);
-    countLine.textContent = `${visible.length} ilan`;
+    countLine.textContent = visible.length === 1 ? "1 listing" : `${visible.length} listings`;
     renderListingList(listRoot, visible, active, (id) => {
       const item = items.find((candidate) => candidate.id === id);
       if (item) view.showDetail(item);

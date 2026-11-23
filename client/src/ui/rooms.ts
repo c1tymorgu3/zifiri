@@ -4,7 +4,7 @@
  * Fast mode posts the envelope as soon as it is sealed and padded. Silent mode
  * parks it in an in-memory queue and posts it when the current 10-minute bucket
  * closes, so the write time an observer sees is the bucket boundary and not the
- * moment the writer pressed "gönder".
+ * moment the writer pressed "send".
  *
  * Three deliberate constraints:
  *
@@ -122,7 +122,7 @@ export function bucketEnd(now: number): number {
 
 function messageOf(caught: unknown): string {
   if (caught instanceof Error && caught.message !== "") return caught.message;
-  return "gönderilemedi";
+  return "could not be sent";
 }
 
 export class Outbox {
@@ -140,13 +140,13 @@ export class Outbox {
     if (request.clock) this.clock = request.clock;
 
     if (!isMode(request.mode)) {
-      throw new RoomError(`bilinmeyen mod: ${String(request.mode)}`, "bad_mode");
+      throw new RoomError(`unknown mode: ${String(request.mode)}`, "bad_mode");
     }
     if (request.body.trim() === "") {
-      throw new RoomError("boş mesaj gönderilmez", "empty");
+      throw new RoomError("an empty message is not sent", "empty");
     }
     if (typeof request.pad !== "function") {
-      throw new RoomError("pad zorunlu: dolgusuz gövde gönderilmez", "pad_required");
+      throw new RoomError("pad required: an unpadded body is not sent", "pad_required");
     }
 
     const plain = new TextEncoder().encode(request.body);
@@ -154,11 +154,11 @@ export class Outbox {
     const envelope = request.pad(sealed);
 
     if (!(envelope instanceof Uint8Array)) {
-      throw new RoomError("pad bir Uint8Array döndürmeli", "bad_padding");
+      throw new RoomError("pad must return a Uint8Array", "bad_padding");
     }
     if (!(PAD_BUCKETS as readonly number[]).includes(envelope.length)) {
       throw new RoomError(
-        `dolgu ${envelope.length} bayt; kova boyları: ${PAD_BUCKETS.join(", ")}`,
+        `padding ${envelope.length} bytes; bucket sizes: ${PAD_BUCKETS.join(", ")}`,
         "bad_padding",
       );
     }
@@ -324,14 +324,14 @@ export interface RoomMessage {
  */
 export function renderRooms(root: HTMLElement, messages: readonly RoomMessage[]): void {
   const doc = root.ownerDocument ?? (typeof document === "undefined" ? null : document);
-  if (doc === null) throw new RoomError("renderRooms bir belge gerektirir", "no_document");
+  if (doc === null) throw new RoomError("renderRooms requires a document", "no_document");
 
   root.replaceChildren();
 
   if (messages.length === 0) {
     const empty = doc.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Henüz mesaj yok.";
+    empty.textContent = "No messages yet.";
     root.append(empty);
     return;
   }

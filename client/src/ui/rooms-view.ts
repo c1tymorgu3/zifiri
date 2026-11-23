@@ -1,5 +1,5 @@
 /**
- * Odalar — the room list, the message stream, and the composer.
+ * Rooms — the room list, the message stream, and the composer.
  *
  * Three things this surface refuses to draw, each for a reason the product
  * states elsewhere:
@@ -8,8 +8,8 @@
  *    would be a label the server does not have and the reader cannot verify.
  *  - No presence marker unless presence is on. "Offline" is still a trace;
  *    when the toggle is off the row says nothing at all.
- *  - No "gönderildi" tick. In silent mode the message waits for the bucket, so
- *    the honest indicator is the queue ("2 bekliyor"), not a delivery claim.
+ *  - No "delivered" tick. In silent mode the message waits for the bucket, so
+ *    the honest indicator is the queue ("2 waiting"), not a delivery claim.
  *
  * The clock beside a message is the message's own published time — the bucket
  * boundary it was released with — never the moment the writer pressed send.
@@ -23,20 +23,20 @@
 import "../styles/rooms.css";
 import { anonymityCount, DEFAULT_MODE, describeMode, isMode, type Mode } from "./mode";
 
-/** Characters, not bytes: a Turkish letter is one character to the writer. */
+/** Characters, not bytes: one grapheme is one character to the writer. */
 export const CHAR_LIMIT = 500;
 
 /** The sentence the silent mode is sold with; kept in one place so the copy cannot drift. */
-export const SILENT_WAIT = "10 dakikaya kadar bekler";
+export const SILENT_WAIT = "waits up to 10 minutes";
 
 /** Ticks in the silent-mode queue bar; one per message that may be ahead. */
 export const QUEUE_TICKS = 10;
 
-export const EMPTY_ROOMS = "Henüz oda yok; ilk oda açıldığında burada listelenir.";
+export const EMPTY_ROOMS = "No rooms yet; the first room appears here when it opens.";
 
-export const EMPTY_MESSAGES = "Bu odada henüz mesaj yok; ilk mesaj 10 dakikalık kovaya girer.";
+export const EMPTY_MESSAGES = "No messages in this room yet; the first one joins a 10-minute bucket.";
 
-export const NO_ROOM = "Bir oda seç; mesajlar o odada görünür.";
+export const NO_ROOM = "Pick a room; its messages show here.";
 
 export interface RoomSummary {
   readonly id: string;
@@ -69,7 +69,7 @@ export interface RoomListOptions {
 export function sortRooms(rooms: readonly RoomSummary[]): RoomSummary[] {
   return [...rooms].sort((a, b) => {
     if (b.lastActivityAt !== a.lastActivityAt) return b.lastActivityAt - a.lastActivityAt;
-    return a.name.localeCompare(b.name, "tr");
+    return a.name.localeCompare(b.name, "en");
   });
 }
 
@@ -77,19 +77,19 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** Compact age for a list row: `şimdi`, `3 dk`, `2 sa`, `4 g`. */
+/** Compact age for a list row: `now`, `3 min`, `2 h`, `4 d`. */
 export function relativeTime(at: number, now: number): string {
   const age = Math.max(0, now - at);
-  if (age < MINUTE) return "şimdi";
-  if (age < HOUR) return `${Math.floor(age / MINUTE)} dk`;
-  if (age < DAY) return `${Math.floor(age / HOUR)} sa`;
-  return `${Math.floor(age / DAY)} g`;
+  if (age < MINUTE) return "now";
+  if (age < HOUR) return `${Math.floor(age / MINUTE)} min`;
+  if (age < DAY) return `${Math.floor(age / HOUR)} h`;
+  return `${Math.floor(age / DAY)} d`;
 }
 
-/** The same age as a sentence fragment: `şimdi` or `3 dk önce`. */
+/** The same age as a sentence fragment: `now` or `3 min ago`. */
 export function sinceLabel(at: number, now: number): string {
   const short = relativeTime(at, now);
-  return short === "şimdi" ? short : `${short} önce`;
+  return short === "now" ? short : `${short} ago`;
 }
 
 function pad2(value: number): string {
@@ -129,7 +129,7 @@ function visuallyHidden(doc: Document, text: string): HTMLSpanElement {
 
 function requireDocument(root: HTMLElement): Document {
   const doc = root.ownerDocument ?? (typeof document === "undefined" ? null : document);
-  if (doc === null) throw new Error("rooms-view bir belge gerektirir");
+  if (doc === null) throw new Error("rooms-view requires a document");
   return doc;
 }
 
@@ -177,7 +177,7 @@ export function renderRoomList(
       const unread = element(doc, "span", "zf-room-unread");
       const count = element(doc, "span", "zf-room-unread-count");
       count.textContent = String(room.unread);
-      unread.append(visuallyHidden(doc, "okunmamış "), count);
+      unread.append(visuallyHidden(doc, "unread "), count);
       meta.append(unread);
     }
 
@@ -186,7 +186,7 @@ export function renderRoomList(
     if (room.presence) {
       const dot = element(doc, "span", "zf-room-dot");
       dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", "şu an açık");
+      dot.setAttribute("aria-label", "active now");
       row.append(dot);
     }
 
@@ -302,11 +302,11 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   let sending = false;
 
   const section = element(doc, "section", "zf-rooms");
-  section.setAttribute("aria-label", "Odalar");
+  section.setAttribute("aria-label", "Rooms");
 
   const index = element(doc, "div", "zf-rooms-index");
   const indexTitle = element(doc, "h2", "zf-panel-title");
-  indexTitle.textContent = "Odalar";
+  indexTitle.textContent = "Rooms";
   const listRoot = element(doc, "div", "zf-rooms-index-body");
   index.append(indexTitle, listRoot);
 
@@ -320,7 +320,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   const stream = element(doc, "div", "zf-stream");
   stream.setAttribute("role", "log");
   stream.setAttribute("aria-live", "polite");
-  stream.setAttribute("aria-label", "Mesajlar");
+  stream.setAttribute("aria-label", "Messages");
 
   const form = element(doc, "form", "zf-composer");
   form.setAttribute("novalidate", "");
@@ -331,19 +331,19 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   const label = element(doc, "label", "zf-visually-hidden");
   label.setAttribute("for", inputId);
-  label.textContent = "Mesaj";
+  label.textContent = "Message";
 
   const input = element(doc, "textarea", "zf-composer-input");
   input.id = inputId;
   input.rows = 2;
-  input.setAttribute("placeholder", "Odaya yaz");
+  input.setAttribute("placeholder", "Write to the room");
   input.setAttribute("aria-describedby", `${consequenceId} ${counterId}`);
 
   const bar = element(doc, "div", "zf-composer-bar");
 
   const modes = element(doc, "div", "zf-modes");
   modes.setAttribute("role", "radiogroup");
-  modes.setAttribute("aria-label", "Gönderim modu");
+  modes.setAttribute("aria-label", "Delivery mode");
 
   const radioName = `zf-mode-${uid}`;
   const radios = new Map<Mode, HTMLInputElement>();
@@ -358,7 +358,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
       if (radio.checked) setMode(value);
     });
     const caption = element(doc, "span", "zf-mode-label");
-    caption.textContent = value === "fast" ? "Hızlı" : "Sessiz";
+    caption.textContent = value === "fast" ? "Fast" : "Silent";
     option.append(radio, caption);
     radios.set(value, radio);
     modes.append(option);
@@ -378,7 +378,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   const send = element(doc, "button", "zf-send");
   send.type = "submit";
-  send.textContent = "Gönder";
+  send.textContent = "Send";
 
   bar.append(modes, counter, send);
 
@@ -417,7 +417,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   const powCancel = element(doc, "button", "zf-pow-cancel");
   powCancel.type = "button";
-  powCancel.textContent = "iptal";
+  powCancel.textContent = "cancel";
   powCancel.addEventListener("click", () => options.onCancel?.());
 
   pow.append(powBar, powLabel, powCancel);
@@ -439,9 +439,9 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   function paintAnonymity(): void {
     // Fast mode is honest about its narrow window: the number is who else wrote
-    // in the last minute, so the key says "şu an". Silent mode is the mode the
-    // number describes, and it says so without hedging.
-    anonymityKey.textContent = mode === "fast" ? "şu an anonimlik: " : "anonimlik: ";
+    // in the last minute, so the key says "right now". Silent mode is the mode
+    // the number describes, and it says so without hedging.
+    anonymityKey.textContent = mode === "fast" ? "anonymity right now: " : "anonymity: ";
     anonymityValue.textContent = String(anonymityCount(mode, recent));
     anonymity.setAttribute("data-mode", mode);
   }
@@ -449,7 +449,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   function paintCounter(): void {
     const chars = countChars(input.value);
     counter.textContent =
-      chars > CHAR_LIMIT ? `${chars} / ${CHAR_LIMIT} · ${chars - CHAR_LIMIT} fazla` : `${chars} / ${CHAR_LIMIT}`;
+      chars > CHAR_LIMIT ? `${chars} / ${CHAR_LIMIT} · ${chars - CHAR_LIMIT} over` : `${chars} / ${CHAR_LIMIT}`;
     counter.setAttribute("data-state", chars > CHAR_LIMIT ? "over" : "ok");
     if (canSend()) send.removeAttribute("disabled");
     else send.setAttribute("disabled", "");
@@ -466,7 +466,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
     }
     pendingLine.removeAttribute("hidden");
     pendingLine.textContent =
-      pending <= 0 ? `${SILENT_WAIT} · bekleyen yok` : `${SILENT_WAIT} · ${pending} bekliyor`;
+      pending <= 0 ? `${SILENT_WAIT} · nothing waiting` : `${SILENT_WAIT} · ${pending} waiting`;
     // The text is the line; the bar rides at the end of it and says the same
     // thing without words.
     pendingLine.append(queue);
@@ -481,7 +481,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   function paintRoomHead(): void {
     const current = rooms.find((candidate) => candidate.id === activeRoomId);
     if (current === undefined) {
-      title.textContent = "Oda seçilmedi";
+      title.textContent = "No room selected";
       sub.textContent = "";
       sub.setAttribute("hidden", "");
       form.setAttribute("hidden", "");
@@ -489,7 +489,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
       return;
     }
     title.textContent = current.name;
-    sub.textContent = `son mesaj ${sinceLabel(current.lastActivityAt, now())}`;
+    sub.textContent = `last message ${sinceLabel(current.lastActivityAt, now())}`;
     sub.removeAttribute("hidden");
     form.removeAttribute("hidden");
     renderMessageStream(stream, messages);
@@ -503,9 +503,9 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
         ? {}
         : { onSelect: (roomId: string) => options.onSelectRoom?.(roomId) }),
     });
-    // The rail already says "Odalar"; a heading that repeats it is a second
+    // The rail already says "Rooms"; a heading that repeats it is a second
     // title with nothing to say. The count is the information this column owns.
-    indexTitle.textContent = rooms.length === 1 ? "1 oda" : `${rooms.length} oda`;
+    indexTitle.textContent = rooms.length === 1 ? "1 room" : `${rooms.length} rooms`;
   }
 
   function setMode(next: Mode): void {
@@ -580,12 +580,12 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
       pow.removeAttribute("hidden");
       // Indeterminate: the number of attempts is real, the total is not.
       powBar.removeAttribute("value");
-      powLabel.textContent = `deneme ${attempts}`;
+      powLabel.textContent = `${attempts} attempts`;
     },
     setSending(next: boolean): void {
       sending = next;
       form.setAttribute("aria-busy", next ? "true" : "false");
-      send.textContent = next ? "Gönderiliyor" : "Gönder";
+      send.textContent = next ? "Sending" : "Send";
       paintCounter();
     },
     mode: () => mode,

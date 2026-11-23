@@ -1,12 +1,13 @@
 /*
- * İlanlar — DESIGN.md "Kamu hizmeti, 2026".
+ * Listings — DESIGN.md "public utility, 2026".
  *
- * Kural, kutu değil: ayraçlar 1px `--line`, kenarlık yalnız girdilerde ve
- * yıkıcı bölgede. Amber tek bir şey için: birincil eylem. Sayılar tabular
- * mono, çünkü fiyat ve gün alt alta hizalanır.
+ * Rules, not boxes: separators are 1px `--line`, and a border appears only on
+ * inputs and in the destructive zone. Amber means one thing: the primary
+ * action. Numbers are tabular mono, because price and day line up under each
+ * other.
  *
- * Tokenlar yüzeye kapsanmıştır: modül kendi kendine yeter, sayfanın geri
- * kalanının renklerini ezmez.
+ * Tokens are scoped to the surface: the module is self-sufficient and does not
+ * override the colours of the rest of the page.
  */
 
 .listings-surface {
@@ -42,7 +43,7 @@
   box-sizing: inherit;
 }
 
-/* ---------------------------------------------------------------- başlık */
+/* ------------------------------------------------------------------ head */
 
 .listings-head {
   display: flex;
@@ -61,7 +62,7 @@
   letter-spacing: -0.01em;
 }
 
-/* ------------------------------------------------------------- düğmeler */
+/* --------------------------------------------------------------- buttons */
 
 .btn-primary,
 .btn-quiet,
@@ -85,7 +86,7 @@
 .btn-primary {
   background: var(--accent);
   border: 1px solid var(--accent);
-  /* Amber üstünde daima koyu metin; 600 yalnız başlıklara ayrılmıştır. */
+  /* Always dark text on amber; 600 is reserved for headings. */
   color: #0b0c0e;
   font-weight: 500;
 }
@@ -95,7 +96,7 @@
   border-color: #f0b45a;
 }
 
-/* Kutu değil, düğme: ikincil eylem çerçeve taşımaz. */
+/* A button, not a box: a secondary action carries no frame. */
 .btn-quiet {
   background: transparent;
   border: 0;
@@ -129,7 +130,7 @@
   border-bottom: 1px solid var(--line);
 }
 
-/* Mobilde katlanır: kutu değil, alt çizgi — ayraç yeter. */
+/* Folds on mobile: an underline, not a box — the separator is enough. */
 .listings-filters-toggle {
   display: none;
   width: 100%;
@@ -217,7 +218,7 @@ select.field-input {
   color: var(--muted);
 }
 
-/* ----------------------------------------------------------------- satır */
+/* ------------------------------------------------------------------- row */
 
 .listings-list {
   border-top: 1px solid var(--line);
@@ -268,7 +269,7 @@ select.field-input {
   white-space: nowrap;
 }
 
-.listing-price.takas {
+.listing-price.trade {
   color: var(--muted);
   font-weight: 500;
 }
@@ -422,7 +423,7 @@ select.field-input {
 .field-check {
   width: 18px;
   height: 18px;
-  /* Bölgede tek amber var: gönder düğmesi. */
+  /* One amber in the zone: the send button. */
   accent-color: var(--fg);
 }
 
@@ -438,9 +439,9 @@ select.field-input {
   color: var(--danger);
 }
 
-/* Renk tek başına sinyal değil: sınır aşımı yazıyla da söylenir. */
+/* Colour is not the only signal: the overflow is said in words too. */
 .counter.over::after {
-  content: " · sınır aşıldı";
+  content: " · over the limit";
 }
 
 .field-error {

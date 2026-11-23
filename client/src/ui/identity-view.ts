@@ -4,7 +4,7 @@
  *
  * The copy is the design here. `docs/spec.md` asks for the `zifiri1...` string in
  * mono, an 8-character fingerprint, a copy button, and one sentence —
- * "Bu satırı kaybedersen kimliğin gider." — and the danger zone is a
+ * "If you lose this line, your identity is gone." — and the danger zone is a
  * `--danger` border with a phrase typed by hand, not a red button with a
  * trash icon. Nothing in this module decorates danger; it only gates it.
  *
@@ -13,7 +13,7 @@
  *  - An import failure never repeats the input. A pasted seed can be one
  *    character off, and echoing it into a status line would put half a secret
  *    on screen and into any screenshot. Every message below is fixed text.
- *  - "Yok ol" is two steps and no undo: arm, then type the phrase. The
+ *  - "Vanish" is two steps and no undo: arm, then type the phrase. The
  *    callback fires once; after that the control is spent.
  */
 import {
@@ -35,9 +35,9 @@ export const FINGERPRINT_LENGTH = 8;
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 
 /** The exact phrase, lower case. Matching tolerates case and spacing. */
-export const VANISH_PHRASE = "yok ol";
+export const VANISH_PHRASE = "vanish";
 
-export const LOST_WARNING = "Bu satırı kaybedersen kimliğin gider.";
+export const LOST_WARNING = "If you lose this line, your identity is gone.";
 
 export type DangerStep = "idle" | "armed" | "confirmed";
 
@@ -123,9 +123,9 @@ export function shortFingerprint(seed: Uint8Array): string {
 /**
  * Case- and spacing-tolerant comparison for the confirmation phrase.
  *
- * Turkish has two i's and a dotless one; a phone keyboard will happily give
- * "YOK OL", "Yok ol" or "YOK OL" with a dotted capital. All of them mean the
- * same word to the person typing, so all of them pass. Nothing else does.
+ * A phone keyboard will happily give "VANISH", "Vanish" or "Vanish" with a
+ * trailing space. All of them mean the same word to the person typing, so all
+ * of them pass. Nothing else does.
  */
 export function matchesVanishPhrase(text: string): boolean {
   if (typeof text !== "string") return false;
@@ -151,21 +151,21 @@ async function clipboardCopy(text: string): Promise<void> {
 function failure(code: ImportCode): ImportResult {
   switch (code) {
     case "empty":
-      return { ok: false, code, message: "Önce yedek satırı yapıştır." };
+      return { ok: false, code, message: "Paste the backup line first." };
     case "prefix":
-      return { ok: false, code, message: `Satır "${EXPORT_PREFIX}" ile başlamıyor.` };
+      return { ok: false, code, message: `The line does not start with "${EXPORT_PREFIX}".` };
     case "charset":
-      return { ok: false, code, message: "Satırda base32 dışı bir karakter var." };
+      return { ok: false, code, message: "The line contains a character outside base32." };
     case "length":
       return {
         ok: false,
         code,
-        message: `Satır eksik ya da fazla: ${LINE_LENGTH} karakter olmalı.`,
+        message: `The line is short or long: it must be ${LINE_LENGTH} characters.`,
       };
     case "checksum":
-      return { ok: false, code, message: "Kontrol toplamı tutmuyor. Satırı eksiksiz kopyala." };
+      return { ok: false, code, message: "The checksum does not match. Copy the whole line." };
     case "unreadable":
-      return { ok: false, code, message: "Satır okunamadı. Yedeği olduğu gibi yapıştır." };
+      return { ok: false, code, message: "The line could not be read. Paste the backup as it is." };
   }
 }
 
@@ -237,8 +237,8 @@ export function createIdentityView(options: IdentityViewOptions = {}): IdentityV
     adopt(parsed);
     dom?.setImportStatus(
       parsed.warnings.length > 0
-        ? `Kimlik içe aktarıldı. Satır eski "${LEGACY_EXPORT_PREFIX}" önekiyle başlıyor; yenisi "${EXPORT_PREFIX}".`
-        : "Kimlik içe aktarıldı.",
+        ? `Identity imported. The line starts with the old "${LEGACY_EXPORT_PREFIX}" prefix; the new one is "${EXPORT_PREFIX}".`
+        : "Identity imported.",
     );
     return { ok: true, state: state() };
   }
@@ -251,22 +251,22 @@ export function createIdentityView(options: IdentityViewOptions = {}): IdentityV
 
   async function copyLine(): Promise<boolean> {
     if (line === null) {
-      dom?.setCopyStatus("Kopyalanacak satır yok.");
+      dom?.setCopyStatus("There is no line to copy.");
       return false;
     }
     try {
       await copy(line);
     } catch {
-      dom?.setCopyStatus("Kopyalanamadı. Satırı seçip elle kopyala.");
+      dom?.setCopyStatus("Could not copy. Select the line and copy it by hand.");
       return false;
     }
-    dom?.setCopyStatus("Satır kopyalandı.");
+    dom?.setCopyStatus("Line copied.");
     return true;
   }
 
   function armVanish(): boolean {
     if (identity === null) {
-      dom?.setDangerStatus("Önce bir kimlik gerekiyor.");
+      dom?.setDangerStatus("An identity is required first.");
       return false;
     }
     if (vanished) return false;
@@ -287,20 +287,20 @@ export function createIdentityView(options: IdentityViewOptions = {}): IdentityV
     if (danger !== "armed") return { ok: false, reason: "not-armed" };
     if (!matchesVanishPhrase(phrase)) {
       // The phrase is not echoed back; the instruction is.
-      dom?.setDangerStatus(`Onay için "${VANISH_PHRASE}" yaz.`);
+      dom?.setDangerStatus(`Type "${VANISH_PHRASE}" to confirm.`);
       return { ok: false, reason: "phrase" };
     }
 
     danger = "confirmed";
     dom?.render();
-    dom?.setDangerStatus("Silme başladı. Bu işlem geri alınamaz.");
+    dom?.setDangerStatus("Deletion started. This cannot be undone.");
     try {
       await onVanish?.();
     } catch {
       danger = "armed";
       vanished = false;
       dom?.render();
-      dom?.setDangerStatus("Silme tamamlanamadı. Yeniden dene.");
+      dom?.setDangerStatus("Deletion did not finish. Try again.");
       return { ok: false, reason: "failed" };
     }
     vanished = true;
@@ -369,12 +369,12 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   const head = doc.createElement("header");
   head.className = "identity-head";
   const title = doc.createElement("h2");
-  title.textContent = "Kimlik";
+  title.textContent = "Identity";
   head.append(title);
 
   const lineLabel = doc.createElement("p");
   lineLabel.className = "identity-caption";
-  lineLabel.textContent = "Yedek satır";
+  lineLabel.textContent = "Backup line";
 
   const lineEl = doc.createElement("code");
   lineEl.className = "identity-line";
@@ -386,7 +386,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   fpWrap.className = "identity-fp";
   const fpLabel = doc.createElement("span");
   fpLabel.className = "identity-caption";
-  fpLabel.textContent = "Parmak izi";
+  fpLabel.textContent = "Fingerprint";
   const fpEl = doc.createElement("code");
   fpEl.className = "identity-fp-value";
   fpWrap.append(fpLabel, fpEl);
@@ -394,7 +394,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   const copyBtn = doc.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "identity-copy";
-  copyBtn.textContent = "Kopyala";
+  copyBtn.textContent = "Copy";
   copyBtn.addEventListener("click", () => {
     void actions.copyLine();
   });
@@ -417,7 +417,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
 
   const importLabel = doc.createElement("label");
   importLabel.className = "identity-caption";
-  importLabel.append("İçe aktar");
+  importLabel.append("Import");
 
   const importInput = doc.createElement("input");
   importInput.type = "text";
@@ -429,7 +429,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   const importBtn = doc.createElement("button");
   importBtn.type = "submit";
   importBtn.className = "identity-import-button";
-  importBtn.textContent = "İçe aktar";
+  importBtn.textContent = "Import";
 
   const importStatus = doc.createElement("p");
   importStatus.className = "identity-import-status";
@@ -448,21 +448,21 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
 
   const dangerZone = doc.createElement("section");
   dangerZone.className = "identity-danger";
-  dangerZone.setAttribute("aria-label", "Tehlike bölgesi");
+  dangerZone.setAttribute("aria-label", "Danger zone");
 
   const dangerTitle = doc.createElement("h3");
   dangerTitle.className = "identity-danger-title";
-  dangerTitle.textContent = "Tehlike bölgesi";
+  dangerTitle.textContent = "Danger zone";
 
   const dangerBody = doc.createElement("p");
   dangerBody.className = "identity-danger-body";
   dangerBody.textContent =
-    "Bütün gönderilerini ve ilanlarını siler. Geri alınamaz.";
+    "Deletes all your posts and listings. Irreversible.";
 
   const armBtn = doc.createElement("button");
   armBtn.type = "button";
   armBtn.className = "identity-arm";
-  armBtn.textContent = "Yok ol";
+  armBtn.textContent = "Vanish";
   armBtn.addEventListener("click", () => {
     actions.armVanish();
   });
@@ -472,7 +472,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
 
   const confirmLabel = doc.createElement("label");
   confirmLabel.className = "identity-confirm-label";
-  confirmLabel.append(`Onaylamak için "${VANISH_PHRASE}" yaz`);
+  confirmLabel.append(`Type "${VANISH_PHRASE}" to confirm`);
 
   const confirmInput = doc.createElement("input");
   confirmInput.type = "text";
@@ -488,7 +488,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   const confirmBtn = doc.createElement("button");
   confirmBtn.type = "button";
   confirmBtn.className = "identity-confirm-button";
-  confirmBtn.textContent = "Kalıcı olarak sil";
+  confirmBtn.textContent = "Delete permanently";
   confirmBtn.addEventListener("click", () => {
     void actions.confirmVanish(confirmInput.value);
   });
@@ -496,7 +496,7 @@ function buildDom(mount: HTMLElement, actions: IdentityDomActions): IdentityDom 
   const cancelBtn = doc.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.className = "identity-cancel";
-  cancelBtn.textContent = "Vazgeç";
+  cancelBtn.textContent = "Cancel";
   cancelBtn.addEventListener("click", () => {
     actions.cancelVanish();
   });

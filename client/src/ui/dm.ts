@@ -1,5 +1,5 @@
 /**
- * 1:1 messaging surface (scope v5, "1:1 — gönderen zaten yok").
+ * 1:1 messaging surface (scope v5, "1:1 — there is no sender").
  *
  * The server keeps a mailbox keyed by `HMAC(pepper, recipient_pk)` and no
  * sender column at all, so this module owns everything the wire does not say:
@@ -32,7 +32,7 @@ const SEEN_LIMIT = 4096;
 /** Presence is coarse on purpose: "now" or "not now", five-minute grain. */
 export const PRESENCE_WINDOW_MS = 5 * 60 * 1000;
 
-export type PresenceLabel = "çevrimiçi" | "5+ dk" | "bilinmiyor";
+export type PresenceLabel = "online" | "5+ min" | "unknown";
 
 export type PeerKey = Uint8Array;
 
@@ -157,7 +157,7 @@ export function peerLabel(thread: DmThread): string {
   }
   const bytes = hexToBytes(thread.peer);
   if (bytes !== null) return formatPeerFingerprint(peerFingerprint(bytes));
-  return thread.peer.slice(0, 8) || "bilinmiyor";
+  return thread.peer.slice(0, 8) || "unknown";
 }
 
 /** One-line summary of a message for the conversation list. */
@@ -169,7 +169,7 @@ export function summarize(text: string, max = MAX_SUMMARY): string {
 
 /**
  * Presence, coarse and mutual. Off means off: with `enabled` not strictly true
- * this returns "bilinmiyor" before touching the injected request function, so
+ * this returns "unknown" before touching the injected request function, so
  * a disabled switch leaves no row, no ping, no timing signal.
  */
 export async function presenceState(
@@ -178,8 +178,8 @@ export async function presenceState(
   request?: PresenceFn,
   now: () => number = Date.now,
 ): Promise<PresenceLabel> {
-  if (enabled !== true) return "bilinmiyor";
-  if (request === undefined) return "bilinmiyor";
+  if (enabled !== true) return "unknown";
+  if (request === undefined) return "unknown";
 
   let reading: PresenceReading | null = null;
   try {
@@ -187,12 +187,12 @@ export async function presenceState(
   } catch {
     // A presence probe that fails is not a reason to show a peer as online,
     // and it is not a reason to break the conversation list either.
-    return "bilinmiyor";
+    return "unknown";
   }
-  if (reading === null || typeof reading !== "object") return "bilinmiyor";
+  if (reading === null || typeof reading !== "object") return "unknown";
   const lastSeen = reading.lastSeen;
-  if (typeof lastSeen !== "number" || !Number.isFinite(lastSeen)) return "bilinmiyor";
-  return now() - lastSeen <= PRESENCE_WINDOW_MS ? "çevrimiçi" : "5+ dk";
+  if (typeof lastSeen !== "number" || !Number.isFinite(lastSeen)) return "unknown";
+  return now() - lastSeen <= PRESENCE_WINDOW_MS ? "online" : "5+ min";
 }
 
 /** Only openable envelopes are ever counted; decoys never reach a thread. */
@@ -232,7 +232,7 @@ export function createDm(deps: DmDeps): Dm {
       lastText: "",
       lastAt: 0,
       unread: 0,
-      presence: "bilinmiyor",
+      presence: "unknown",
     };
     threads.set(peer, created);
     return created;
@@ -390,7 +390,7 @@ export function renderDm(root: HTMLElement, threads: readonly DmThread[]): void 
   if (threads.length === 0) {
     const empty = doc.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Henüz kimseyle konuşmadın.";
+    empty.textContent = "You have not talked to anyone yet.";
     root.replaceChildren(empty);
     return;
   }
@@ -411,7 +411,7 @@ export function renderDm(root: HTMLElement, threads: readonly DmThread[]): void 
 
     const preview = doc.createElement("span");
     preview.className = "dm-preview";
-    preview.textContent = thread.lastText === "" ? "mesaj yok" : summarize(thread.lastText);
+    preview.textContent = thread.lastText === "" ? "no messages" : summarize(thread.lastText);
 
     const presence = doc.createElement("span");
     presence.className = "dm-presence";
@@ -422,7 +422,7 @@ export function renderDm(root: HTMLElement, threads: readonly DmThread[]): void 
     if (thread.unread > 0) {
       const badge = doc.createElement("span");
       badge.className = "dm-unread";
-      badge.textContent = `${thread.unread} okunmamış`;
+      badge.textContent = `${thread.unread} unread`;
       button.append(badge);
     }
 

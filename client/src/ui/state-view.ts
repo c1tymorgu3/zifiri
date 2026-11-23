@@ -39,7 +39,7 @@ export function renderSkeleton(mount: HTMLElement, rows = 5): void {
   const doc = mount.ownerDocument;
   const wrap = el(doc, "div", "zf-skeleton");
   wrap.setAttribute("aria-busy", "true");
-  wrap.setAttribute("aria-label", "yükleniyor");
+  wrap.setAttribute("aria-label", "loading");
 
   for (let index = 0; index < rows; index += 1) {
     const row = el(doc, "div", "zf-skeleton-row");
@@ -90,5 +90,5 @@ export function renderOfflineRule(rule: HTMLElement, offline: boolean): void {
     return;
   }
   rule.removeAttribute("hidden");
-  rule.textContent = "Bağlantı yok. Yazma kapalı; bağlantı gelince yeniden dene.";
+  rule.textContent = "No connection. Writing is off; try again when it returns.";
 }

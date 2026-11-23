@@ -353,7 +353,7 @@
   border-block-start: 1px solid var(--dm-line);
 }
 
-/* Mode switch: Sessiz / Hızlı, and the one-line consequence under it. */
+/* Mode switch: silent / fast, and the one-line consequence under it. */
 .dm-modes {
   display: flex;
   flex-wrap: wrap;

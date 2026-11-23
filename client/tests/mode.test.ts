@@ -31,17 +31,17 @@ describe("chooseMode", () => {
 });
 
 describe("describeMode", () => {
-  it("says the silent promise in one Turkish line", () => {
+  it("says the silent promise in one line", () => {
     // The wait is the queue line's job (SILENT_WAIT); this sentence states the
     // privacy and nothing else, so the two lines never say the same thing twice.
-    expect(describeMode("silent")).toBe("yazma anın ~%99 gizli");
+    expect(describeMode("silent")).toBe("your write moment ~99% hidden");
     expect(describeMode("silent")).not.toContain("\n");
   });
 
   it("does not sell fast mode as equally private", () => {
     const fast = describeMode("fast");
-    expect(fast).toBe("yazma anın ~%80 gizli, mesaj hemen gider");
-    expect(fast).not.toContain("%99");
+    expect(fast).toBe("your write moment ~80% hidden, the message goes out at once");
+    expect(fast).not.toContain("~99%");
     expect(fast).not.toContain("\n");
   });
 
@@ -86,7 +86,7 @@ describe("createModeSwitch", () => {
       modeSwitch.choose("silent");
       expect(modeSwitch.current()).toBe("silent");
       expect(chooseMode("fast")).toBe("fast");
-      expect(describeMode("fast")).toContain("hemen");
+      expect(describeMode("fast")).toContain("at once");
     } finally {
       Reflect.deleteProperty(globalThis, "localStorage");
       Reflect.deleteProperty(globalThis, "sessionStorage");

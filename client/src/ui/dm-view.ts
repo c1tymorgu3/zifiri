@@ -9,11 +9,11 @@
  *     this is not. Own messages are set apart by an 8px indent, never by
  *     colour.
  *  2. Presence is off until the user turns it on, and off means *silent*.
- *     The label falls back to "bilinmiyor" before the probe function is
- *     touched, and switching it off drops every cached label so no dot can
- *     survive on a row (scope v5, presence_test).
- *  3. The composer carries the same mode switch as Odalar: Hızlı by default
- *     (scope v5), Sessiz on request, remembered in memory only. The one-line
+ *     The label falls back to "unknown" before the probe function is touched,
+ *     and switching it off drops every cached label so no dot can survive on a
+ *     row (scope v5, presence_test).
+ *  3. The composer carries the same mode switch as Rooms: fast by default
+ *     (scope v5), silent on request, remembered in memory only. The one-line
  *     consequence sits under it, because a mode that changes how hidden a
  *     message is must say so before it is used.
  *
@@ -39,20 +39,20 @@ import { DEFAULT_MODE, describeMode, type Mode } from "./mode";
 export const MAX_BODY = 2000;
 
 /**
- * Bucket mode, in the words the switch shows: Hızlı / Sessiz. Odalar speaks the
+ * Bucket mode, in the words the switch shows: fast / silent. Rooms speaks the
  * same two modes under the same labels; the ids differ because this surface
- * asks once before switching to fast, and that question is written in Turkish.
+ * asks once before switching to fast, and that question is its own copy.
  */
-export type DmMode = "hizli" | "sessiz";
+export type DmMode = "fast" | "silent";
 
 /** The one-line consequence each mode owes the user before it is used. */
 export const MODE_NOTE: Record<DmMode, string> = {
-  hizli: "yazma anın ~%80 gizli · mesaj hemen gider",
-  sessiz: "yazma anın ~%99 gizli · 10 dakikalık kovada bekler",
+  fast: "your write moment ~80% hidden · the message goes out at once",
+  silent: "your write moment ~99% hidden · waits in a 10-minute bucket",
 };
 
 /** The sentence the ask-once row carries before the first fast send. */
-export const FAST_ASK = "Hızlı mod yazma anını ~%80 gizli bırakır. Sessiz mod ~%99.";
+export const FAST_ASK = "Fast mode leaves your write moment ~80% hidden. Silent mode ~99%.";
 
 export interface DmViewOptions {
   /** Panel renders inside this element. Omit it for the DOM-free core. */
@@ -95,12 +95,12 @@ export interface DmView {
   /** Skeleton rows while the first pull is in flight. */
   setLoading(loading: boolean): void;
   /**
-   * Switches the bucket mode. The first switch to Hızlı only asks; the mode
+   * Switches the bucket mode. The first switch to fast only asks; the mode
    * changes when `confirmFastMode` runs, so a privacy downgrade is never a
    * stray click.
    */
   setMode(mode: DmMode): void;
-  /** Answers the ask row: yes, use Hızlı from here on. */
+  /** Answers the ask row: yes, use fast from here on. */
   confirmFastMode(): void;
   /** Answers the ask row: no, stay where we were. */
   cancelFastMode(): void;
@@ -108,7 +108,7 @@ export interface DmView {
   /** Sends the draft. False when empty, unselected or rejected by `onSend`. */
   submit(): Promise<boolean>;
   state(): DmViewState;
-  /** Drops every conversation from memory (identity cleared, "yok ol"). */
+  /** Drops every conversation from memory (identity cleared, "vanish"). */
   clear(): void;
 }
 
@@ -121,15 +121,15 @@ export function clockLabel(at: number): string {
   return `${hours}:${minutes}`;
 }
 
-/** Coarse relative time for the list: "şimdi", "3 dk", "2 sa", "4 g". */
+/** Coarse relative time for the list: "now", "3 min", "2 h", "4 d". */
 export function relativeLabel(at: number, now: number): string {
   if (!Number.isFinite(at) || at <= 0) return "";
   const minutes = Math.floor(Math.max(0, now - at) / 60_000);
-  if (minutes < 1) return "şimdi";
-  if (minutes < 60) return `${minutes} dk`;
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} sa`;
-  return `${Math.floor(hours / 24)} g`;
+  if (hours < 24) return `${hours} h`;
+  return `${Math.floor(hours / 24)} d`;
 }
 
 export function createDmView(options: DmViewOptions): DmView {
@@ -144,8 +144,8 @@ export function createDmView(options: DmViewOptions): DmView {
   let enabled = options.presenceEnabled === true;
   let draft = "";
   let labels = new Map<string, PresenceLabel>();
-  // Silent unless the session already chose; the ask-once gate guards Hızlı.
-  let mode: DmMode = options.mode ?? (DEFAULT_MODE === "fast" ? "hizli" : "sessiz");
+  // Silent unless the session already chose; the ask-once gate guards fast.
+  let mode: DmMode = options.mode ?? (DEFAULT_MODE === "fast" ? "fast" : "silent");
   let askMode = false;
   let askedFast = false;
   let loading = false;
@@ -157,14 +157,14 @@ export function createDmView(options: DmViewOptions): DmView {
   }
 
   function presenceOf(peer: string): PresenceLabel {
-    if (!enabled) return "bilinmiyor";
-    return labels.get(peer) ?? "bilinmiyor";
+    if (!enabled) return "unknown";
+    return labels.get(peer) ?? "unknown";
   }
 
   function state(): DmViewState {
     return {
       presenceEnabled: enabled,
-      presence: selected === null ? "bilinmiyor" : presenceOf(selected),
+      presence: selected === null ? "unknown" : presenceOf(selected),
       selected,
       draft,
       unread: unreadCount(threads),
@@ -201,7 +201,7 @@ export function createDmView(options: DmViewOptions): DmView {
     const thread = threadFor(selected);
     if (!enabled || thread === undefined || thread.peerKey === null) {
       render();
-      return "bilinmiyor";
+      return "unknown";
     }
     // `presenceState` returns before the probe when the switch is off; the
     // `enabled` check above is the second lock on the same door.
@@ -218,7 +218,7 @@ export function createDmView(options: DmViewOptions): DmView {
     }
     if (peer !== null) onOpen?.(peer);
     render();
-    if (peer === null) return "bilinmiyor";
+    if (peer === null) return "unknown";
     return refreshPresence();
   }
 
@@ -227,13 +227,13 @@ export function createDmView(options: DmViewOptions): DmView {
     if (!enabled) {
       labels = new Map();
       render();
-      return "bilinmiyor";
+      return "unknown";
     }
     return refreshPresence();
   }
 
   function setMode(next: DmMode): void {
-    if (next === "hizli" && !askedFast) {
+    if (next === "fast" && !askedFast) {
       askMode = true;
       render();
       return;
@@ -246,7 +246,7 @@ export function createDmView(options: DmViewOptions): DmView {
   function confirmFastMode(): void {
     askedFast = true;
     askMode = false;
-    mode = "hizli";
+    mode = "fast";
     render();
   }
 
@@ -269,12 +269,12 @@ export function createDmView(options: DmViewOptions): DmView {
       await onSend(peer, text, mode);
     } catch {
       // Keep the draft: a failed send must not cost the user their words.
-      dom?.setStatus("Gönderilemedi. Bağlantıyı kontrol et.");
+      dom?.setStatus("Could not send. Check the connection.");
       return false;
     }
     draft = "";
     dom?.renderComposer();
-    dom?.setStatus("Gönderildi.");
+    dom?.setStatus("Sent.");
     return true;
   }
 
@@ -368,7 +368,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
   head.className = "dm-head";
 
   const title = doc.createElement("h2");
-  title.textContent = "Konuşmalar";
+  title.textContent = "Conversations";
 
   const toggleLabel = doc.createElement("label");
   toggleLabel.className = "dm-toggle";
@@ -378,25 +378,25 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
   toggle.addEventListener("change", () => {
     void actions.setPresenceEnabled(toggle.checked);
   });
-  toggleLabel.append(toggle, "Durum bilgisi");
+  toggleLabel.append(toggle, "Presence");
 
   head.append(title, toggleLabel);
 
   const presenceNote = doc.createElement("p");
   presenceNote.className = "dm-note";
   presenceNote.textContent =
-    "Kapalıyken kimse çevrimiçi olduğunu görmez; bu cihaz da kimseyi yoklamaz.";
+    "While off, nobody sees that you are online, and this device probes nobody.";
 
   const body = doc.createElement("div");
   body.className = "dm-body";
 
   const list = doc.createElement("ul");
   list.className = "dm-list";
-  list.setAttribute("aria-label", "Konuşmalar");
+  list.setAttribute("aria-label", "Conversations");
 
   const thread = doc.createElement("section");
   thread.className = "dm-thread";
-  thread.setAttribute("aria-label", "Konuşma");
+  thread.setAttribute("aria-label", "Conversation");
 
   body.append(list, thread);
   section.append(head, presenceNote, body);
@@ -424,7 +424,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     }
     const note = doc.createElement("p");
     note.className = "dm-visually-hidden";
-    note.textContent = "Konuşmalar yükleniyor.";
+    note.textContent = "Loading conversations.";
     list.replaceChildren(...rows, note);
   }
 
@@ -438,7 +438,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
       const cell = doc.createElement("li");
       const empty = doc.createElement("p");
       empty.className = "dm-empty";
-      empty.textContent = "Henüz kimseyle konuşmadın.";
+      empty.textContent = "You have not talked to anyone yet.";
       cell.append(empty);
       list.replaceChildren(cell);
       return;
@@ -462,7 +462,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
 
       const preview = doc.createElement("span");
       preview.className = "dm-preview";
-      preview.textContent = item.lastText === "" ? "mesaj yok" : summarize(item.lastText);
+      preview.textContent = item.lastText === "" ? "no messages" : summarize(item.lastText);
 
       const when = doc.createElement("time");
       when.className = "dm-when";
@@ -473,9 +473,9 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
       meta.append(when);
 
       const label = actions.presenceOf(item.peer);
-      if (actions.presenceOn() && label !== "bilinmiyor") {
+      if (actions.presenceOn() && label !== "unknown") {
         const dot = doc.createElement("span");
-        dot.className = `dm-dot ${label === "çevrimiçi" ? "dm-dot--ok" : "dm-dot--idle"}`;
+        dot.className = `dm-dot ${label === "online" ? "dm-dot--ok" : "dm-dot--idle"}`;
         dot.setAttribute("aria-hidden", "true");
         meta.append(dot);
       }
@@ -483,7 +483,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
       if (item.unread > 0) {
         const badge = doc.createElement("span");
         badge.className = "dm-unread";
-        badge.setAttribute("aria-label", `${item.unread} okunmamış`);
+        badge.setAttribute("aria-label", `${item.unread} unread`);
         badge.textContent = String(item.unread);
         meta.append(badge);
       }
@@ -508,7 +508,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     if (item === undefined) {
       const hint = doc.createElement("p");
       hint.className = "dm-pick";
-      hint.textContent = "Konuşmak için soldan bir satır seç.";
+      hint.textContent = "Pick a row on the left to talk.";
       thread.replaceChildren(hint);
       return;
     }
@@ -523,12 +523,12 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     const presence = doc.createElement("p");
     presence.className = "dm-presence";
     const label = actions.presenceOf(item.peer);
-    const showDot = actions.presenceOn() && label !== "bilinmiyor";
+    const showDot = actions.presenceOn() && label !== "unknown";
     presence.dataset.state = actions.presenceOn() ? "on" : "off";
 
     if (showDot) {
       const dot = doc.createElement("span");
-      dot.className = `dm-dot ${label === "çevrimiçi" ? "dm-dot--ok" : "dm-dot--idle"}`;
+      dot.className = `dm-dot ${label === "online" ? "dm-dot--ok" : "dm-dot--idle"}`;
       dot.setAttribute("aria-hidden", "true");
       presence.append(dot);
     }
@@ -545,7 +545,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
       const cell = doc.createElement("li");
       const empty = doc.createElement("p");
       empty.className = "dm-empty";
-      empty.textContent = "Bu konuşmada mesaj yok.";
+      empty.textContent = "No messages in this conversation.";
       cell.append(empty);
       messages.append(cell);
     }
@@ -559,7 +559,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     modes.className = "dm-modes";
     const legend = doc.createElement("legend");
     legend.className = "dm-caption";
-    legend.textContent = "Mod";
+    legend.textContent = "Mode";
 
     const modeChoice = (value: DmMode, text: string): HTMLElement => {
       const option = doc.createElement("label");
@@ -574,14 +574,14 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
       return option;
     };
 
-    modes.append(legend, modeChoice("hizli", "Hızlı"), modeChoice("sessiz", "Sessiz"));
+    modes.append(legend, modeChoice("fast", "Fast"), modeChoice("silent", "Silent"));
 
     const modeNote = doc.createElement("p");
     modeNote.className = "dm-mode-note";
     modeNote.textContent = MODE_NOTE[actions.modeOf()];
 
     // The ask-once row. It is the only place in the client that interrupts a
-    // choice, and it only does so on the first downgrade to Hızlı.
+    // choice, and it only does so on the first downgrade to fast.
     const modeAsk = doc.createElement("div");
     modeAsk.className = "dm-mode-ask";
     modeAsk.hidden = !actions.askModeOn();
@@ -593,19 +593,19 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     const askYes = doc.createElement("button");
     askYes.type = "button";
     askYes.className = "dm-mode-ask-yes";
-    askYes.textContent = "Hızlı kullan";
+    askYes.textContent = "Use fast";
     askYes.addEventListener("click", () => actions.confirmFastMode());
     const askNo = doc.createElement("button");
     askNo.type = "button";
     askNo.className = "dm-mode-ask-no";
-    askNo.textContent = "Sessiz kal";
+    askNo.textContent = "Stay silent";
     askNo.addEventListener("click", () => actions.cancelFastMode());
     askRow.append(askYes, askNo);
     modeAsk.append(askText, askRow);
 
     const fieldLabel = doc.createElement("label");
     fieldLabel.className = "dm-label";
-    fieldLabel.append("Mesaj");
+    fieldLabel.append("Message");
 
     const input = doc.createElement("textarea");
     input.className = "dm-input";
@@ -625,7 +625,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     const send = doc.createElement("button");
     send.type = "submit";
     send.className = "dm-send";
-    send.textContent = "Mesaj gönder";
+    send.textContent = "Send message";
 
     row.append(modes, counter, send);
 

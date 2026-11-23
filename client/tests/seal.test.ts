@@ -41,16 +41,15 @@ function flip(bytes: Uint8Array, index: number, mask: number): void {
 const KAT_RECIPIENT_SK = '0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20';
 const KAT_RECIPIENT_PK = '07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c';
 const KAT_SEALED =
-  '79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a' +
+  '4d27bcee3135c4944b28d27dd809b07be10c35160d20131caa7e85575498d07c' +
   'a0a1a2a3a4a5a6a7a8a9aaab' +
-  '9d611eb83c1661ce2d65e2bae0994ebb3d73d059774ff23fc26cc661985c9f8a' +
-  'a8162d8517ab47a3e24ef110e3523c6f07ece8';
-const KAT_PLAINTEXT = 'zifiri sealed sender v1 — merhaba';
+  '710ea6f2a7d0a64efdf03a143f353fb3da1beaee32f02f8d0973b8c14525f323f3b33c145f0ab5f413ed116e4a440f08d4';
+const KAT_PLAINTEXT = 'zifiri sealed sender v1 — hello';
 
 describe('seal / open roundtrip', () => {
   it('round-trips a short message', async () => {
     const { sk, pk } = keypair();
-    const message = utf8ToBytes('merhaba');
+    const message = utf8ToBytes('hello');
 
     const sealed = await seal(pk, message);
 
@@ -154,7 +153,7 @@ describe('open rejects without leaking plaintext', () => {
 
   it('rejects corrupted ciphertext', async () => {
     const { sk, pk } = keypair();
-    const sealed = await seal(pk, utf8ToBytes('gizli mesaj'));
+    const sealed = await seal(pk, utf8ToBytes('secret message'));
     flip(sealed, SEAL_OVERHEAD - 1, 0x80);
 
     await expect(open(sk, sealed)).rejects.toBeInstanceOf(OpenError);
@@ -195,7 +194,7 @@ describe('open rejects without leaking plaintext', () => {
 
   it('reports one generic message and never the plaintext', async () => {
     const { sk, pk } = keypair();
-    const message = 'çok gizli metin';
+    const message = 'very secret text';
     const sealed = await seal(pk, utf8ToBytes(message));
     flip(sealed, sealed.length - 1, 0xff);
 

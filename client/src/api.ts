@@ -387,7 +387,7 @@ export async function postRoomMessage(
   });
 }
 
-/* -- "yok ol" -------------------------------------------------------------- */
+/* -- "vanish" -------------------------------------------------------------- */
 
 export interface EraseResult {
   status: string;

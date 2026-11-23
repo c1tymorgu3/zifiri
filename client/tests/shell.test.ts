@@ -228,9 +228,9 @@ describe("shell", () => {
     const drawn = tabs(host);
     expect(drawn).toHaveLength(3);
     expect(drawn.map((tab) => one(tab, "zf-tab-label").textContent)).toEqual([
-      "Odalar",
-      "Mesajlar",
-      "İlanlar",
+      "Rooms",
+      "Messages",
+      "Listings",
     ]);
 
     for (const tab of drawn) {
@@ -302,9 +302,9 @@ describe("shell", () => {
   it("follows the order the surfaces were given for the shortcuts", () => {
     const { mount: host, navigated } = shellOn({
       surfaces: [
-        { id: "listings", label: "İlanlar" },
-        { id: "rooms", label: "Odalar" },
-        { id: "messages", label: "Mesajlar" },
+        { id: "listings", label: "Listings" },
+        { id: "rooms", label: "Rooms" },
+        { id: "messages", label: "Messages" },
       ],
     });
 
@@ -343,7 +343,7 @@ describe("shell", () => {
     expect(() =>
       renderShell(host as unknown as HTMLElement, {
         surfaces: [
-          { id: "rooms", label: "Odalar" },
+          { id: "rooms", label: "Rooms" },
           { id: "rooms", label: "Yine odalar" },
         ],
         active: "rooms",
@@ -395,6 +395,6 @@ describe("shell", () => {
   });
 
   it("exports the three surfaces in rail order", () => {
-    expect(SURFACES.map((surface) => surface.label)).toEqual(["Odalar", "Mesajlar", "İlanlar"]);
+    expect(SURFACES.map((surface) => surface.label)).toEqual(["Rooms", "Messages", "Listings"]);
   });
 });

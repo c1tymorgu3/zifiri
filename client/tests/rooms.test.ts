@@ -54,8 +54,8 @@ interface SendOptions {
 
 function send(options: SendOptions): ReturnType<typeof sendMessage> {
   const request: SendRequest = {
-    room: "genel",
-    body: options.body ?? "merhaba",
+    room: "general",
+    body: options.body ?? "hello",
     mode: options.mode ?? "silent",
     pad: options.pad ?? padTo(),
     post: options.post,
@@ -87,7 +87,7 @@ describe("fast mode", () => {
     expect(mock).toHaveBeenCalledTimes(1);
     expect(posts).toHaveLength(1);
     expect(posts[0]?.mode).toBe("fast");
-    expect(posts[0]?.room).toBe("genel");
+    expect(posts[0]?.room).toBe("general");
     expect(posts[0]?.envelope.length).toBe(4096);
     expect(pendingCount()).toBe(0);
     expect(statusOf("m1")).toBe("sent");
@@ -111,13 +111,13 @@ describe("fast mode", () => {
 
   it("turns a rejected post into failed, not a lost message", async () => {
     const post: PostFn = async () => {
-      throw new Error("ağ yok");
+      throw new Error("no network");
     };
 
     const result = await send({ mode: "fast", post });
 
     expect(result.status).toBe("failed");
-    expect(result.error).toBe("ağ yok");
+    expect(result.error).toBe("no network");
     expect(statusOf("m1")).toBe("failed");
   });
 });
@@ -164,8 +164,8 @@ describe("silent mode", () => {
 
   it("sends one bucket's messages together, in order", async () => {
     const { post, posts } = recorder();
-    await send({ mode: "silent", body: "bir", post });
-    await send({ mode: "silent", body: "iki", post });
+    await send({ mode: "silent", body: "one", post });
+    await send({ mode: "silent", body: "two", post });
     expect(pendingCount()).toBe(2);
 
     await vi.advanceTimersByTimeAsync(BUCKET_MS);
@@ -190,7 +190,7 @@ describe("silent mode", () => {
 
   it("marks a failed flush as failed and clears the backlog", async () => {
     const post: PostFn = async () => {
-      throw new Error("sunucu kapalı");
+      throw new Error("server down");
     };
     await send({ mode: "silent", post });
 
@@ -227,8 +227,8 @@ describe("padding is mandatory", () => {
   it("refuses to send without a pad function", async () => {
     const { post, mock } = recorder();
     const request = {
-      room: "genel",
-      body: "merhaba",
+      room: "general",
+      body: "hello",
       mode: "fast",
       post,
     } as unknown as SendRequest;
@@ -262,8 +262,8 @@ describe("padding is mandatory", () => {
   it("refuses an unknown mode instead of guessing", async () => {
     const { post } = recorder();
     const request = {
-      room: "genel",
-      body: "merhaba",
+      room: "general",
+      body: "hello",
       mode: "turbo",
       pad: padTo(),
       post,
@@ -373,11 +373,11 @@ class FakeElement {
   }
 
   get innerHTML(): string {
-    throw new Error("innerHTML yasak: renderRooms textContent kullanmalı");
+    throw new Error("innerHTML forbidden: renderRooms must use textContent");
   }
 
   set innerHTML(_value: string) {
-    throw new Error("innerHTML yasak: renderRooms textContent kullanmalı");
+    throw new Error("innerHTML forbidden: renderRooms must use textContent");
   }
 
   get childNodes(): readonly FakeElement[] {
@@ -407,14 +407,14 @@ describe("renderRooms", () => {
     const hostile = '<img src=x onerror="alert(1)">';
 
     renderRooms(root, [
-      { id: "a", room: "genel", body: "selam" },
-      { id: "b", room: "genel", body: hostile, self: true },
-      { id: "c", room: "pazar", body: "ikinci oda" },
+      { id: "a", room: "general", body: "hello" },
+      { id: "b", room: "general", body: hostile, self: true },
+      { id: "c", room: "market", body: "second room" },
     ]);
 
     const html = serialize(node);
-    expect(html).toContain("<h2 class=\"\">genel</h2>");
-    expect(html).toContain("<h2 class=\"\">pazar</h2>");
+    expect(html).toContain("<h2 class=\"\">general</h2>");
+    expect(html).toContain("<h2 class=\"\">market</h2>");
     // The markup is shown, not parsed: the only escaping that matters is this one.
     expect(html).toContain(hostile);
     expect(html).toContain('class="message self"');
@@ -422,8 +422,8 @@ describe("renderRooms", () => {
   });
 
   it("renders decoys exactly like real messages: no marker, no class, no text", () => {
-    const real: RoomMessage = { id: "a", room: "genel", body: "selam" };
-    const decoy: RoomMessage = { id: "b", room: "genel", body: "selam", decoy: true };
+    const real: RoomMessage = { id: "a", room: "general", body: "hello" };
+    const decoy: RoomMessage = { id: "b", room: "general", body: "hello", decoy: true };
 
     const plain = mount();
     renderRooms(plain.root, [real]);
@@ -432,7 +432,7 @@ describe("renderRooms", () => {
     renderRooms(withDecoy.root, [{ ...real, decoy: true }]);
 
     expect(serialize(withDecoy.node)).toBe(serialize(plain.node));
-    expect(serialize(withDecoy.node)).not.toMatch(/decoy|sahte|dolgu/i);
+    expect(serialize(withDecoy.node)).not.toMatch(/decoy|fake|padding/i);
 
     // And a decoy in a mixed list is a plain message next to a plain message.
     const mixed = mount();
@@ -450,17 +450,17 @@ describe("renderRooms", () => {
     renderRooms(root, []);
 
     expect(node.childNodes).toHaveLength(1);
-    expect(serialize(node)).toContain("Henüz mesaj yok.");
+    expect(serialize(node)).toContain("No messages yet.");
   });
 
   it("replaces the previous render rather than appending to it", () => {
     const { root, node } = mount();
-    renderRooms(root, [{ id: "a", room: "genel", body: "bir" }]);
-    renderRooms(root, [{ id: "b", room: "genel", body: "iki" }]);
+    renderRooms(root, [{ id: "a", room: "general", body: "one" }]);
+    renderRooms(root, [{ id: "b", room: "general", body: "two" }]);
 
     const html = serialize(node);
-    expect(html).toContain("iki");
-    expect(html).not.toContain("bir");
+    expect(html).toContain(">two<");
+    expect(html).not.toContain(">one<");
     expect(node.childNodes).toHaveLength(1);
   });
 });

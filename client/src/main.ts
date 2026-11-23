@@ -1,7 +1,7 @@
 /**
  * zifiri — the client entry point.
  *
- * One page, three surfaces (Odalar / Mesajlar / İlanlar), an identity panel and
+ * One page, three surfaces (Rooms / Messages / Listings), an identity panel and
  * a danger zone, exactly as the design lays them out. The shell draws the rail,
  * the top strip and the mobile tab bar; this file decides what each surface
  * shows and where its data comes from.
@@ -13,7 +13,7 @@
  *    no analytics.
  *  - `?demo=1`: `src/demo/fixtures.ts`, loaded with `import()` only when the
  *    URL asks for it, so a production visitor never downloads a sample row.
- *    The badge in the top strip says "örnek veri" and carries `data-demo`.
+ *    The badge in the top strip says "sample data" and carries `data-demo`.
  *
  * Every string is written with `textContent`. There is no `innerHTML` here and
  * none in the views. Nothing is stored: no `localStorage`, no cookie, no
@@ -51,13 +51,13 @@ import type { DmThread } from "./ui/dm";
 import type { ListingItem, ListingValue } from "./ui/listings";
 import type { Mode } from "./ui/mode";
 
-/** scope v5, "İki mod — varsayılan hızlı": the product opens in fast. */
+/** scope v5, "two modes — fast by default": the product opens in fast. */
 const START_MODE: Mode = "fast";
 
 /** The only room the server keeps (`Zifiri.Chat.rooms/0`). */
 const LIVE_ROOM: RoomSummary = {
   id: "chat:lobby",
-  name: "lobi",
+  name: "lobby",
   lastActivityAt: 0,
   unread: 0,
   presence: false,
@@ -139,9 +139,9 @@ function say(host: Host, text: string): void {
 }
 
 function describe(error: unknown): string {
-  if (error instanceof Error && error.name === "AbortError") return "İptal edildi.";
-  if (error instanceof ApiError) return `Sunucu ${error.status} dedi (${error.code}).`;
-  return "Sunucuya ulaşılamadı.";
+  if (error instanceof Error && error.name === "AbortError") return "Cancelled.";
+  if (error instanceof ApiError) return `The server said ${error.status} (${error.code}).`;
+  return "The server could not be reached.";
 }
 
 async function loadDemo(): Promise<DemoData> {
@@ -167,7 +167,7 @@ async function boot(): Promise<void> {
   const demo = params.get("demo") === "1" ? await loadDemo() : null;
 
   // `?surface=messages` opens a surface directly. It is a link, not state: the
-  // client still stores nothing, and an unknown value falls back to Odalar.
+  // client still stores nothing, and an unknown value falls back to Rooms.
   const wanted = params.get("surface");
   const initial: SurfaceId =
     wanted === "messages" || wanted === "listings" || wanted === "rooms" ? wanted : "rooms";
@@ -186,7 +186,7 @@ async function boot(): Promise<void> {
 
   const shell: Shell = renderShell(root, {
     active: initial,
-    badge: demo === null ? null : "örnek veri",
+    badge: demo === null ? null : "sample data",
     onNavigate: (id) => show(id),
     onIdentity: () => show("identity"),
     identity: null,
@@ -259,8 +259,8 @@ async function boot(): Promise<void> {
       };
       applyRooms([room], { [room.id]: list });
     } catch (error) {
-      notice(hosts.rooms, "Odalar açılmadı", describe(error), {
-        label: "yeniden dene",
+      notice(hosts.rooms, "Rooms did not open", describe(error), {
+        label: "try again",
         run: () => void loadRooms(),
       });
     }
@@ -269,7 +269,7 @@ async function boot(): Promise<void> {
   async function sendRoom(roomId: string, body: string, mode: Mode): Promise<void> {
     if (!navigator.onLine) {
       roomsView.setValue(body);
-      say(hosts.rooms, "Bağlantı yok. Yazma kapalı; bağlantı gelince yeniden dene.");
+      say(hosts.rooms, "No connection. Writing is off; try again when it returns.");
       return;
     }
 
@@ -293,7 +293,7 @@ async function boot(): Promise<void> {
           pendingCount += 1;
           roomsView.setPending(pendingCount);
         }
-        say(hosts.rooms, mode === "silent" ? "Kuyruğa girdi; 10 dakikaya kadar yayınlanır." : "Gönderildi.");
+        say(hosts.rooms, mode === "silent" ? "Queued; it publishes within 10 minutes." : "Sent.");
         return;
       }
 
@@ -309,7 +309,7 @@ async function boot(): Promise<void> {
       });
       const frame = buildChatFrame({ seed: identity.seed, room: roomId, epoch: page.epoch, ctr, body: raw, padded });
       await postRoomMessage(roomId, { ...frame, ctr, nonce });
-      say(hosts.rooms, "Gönderildi.");
+      say(hosts.rooms, "Sent.");
       await loadRooms();
     } catch (error) {
       roomsView.setValue(body);
@@ -328,17 +328,17 @@ async function boot(): Promise<void> {
 
   const dmView: DmView = createDmView({
     mount: hosts.messages.view,
-    mode: START_MODE === "fast" ? "hizli" : "sessiz",
+    mode: START_MODE === "fast" ? "fast" : "silent",
     presenceEnabled: demo !== null,
     onSend: (peer, text, mode) => {
-      if (demo === null) throw new Error("1:1 taşıma bu yapıda bağlı değil");
+      if (demo === null) throw new Error("1:1 transport is not wired in this build");
       const thread = threads.find((candidate) => candidate.peer === peer);
-      if (thread === undefined) throw new Error("konuşma bulunamadı");
+      if (thread === undefined) throw new Error("conversation not found");
       thread.messages.push({ id: `dm-${Date.now()}`, peer, text, at: Date.now(), self: true, unread: false });
       thread.lastText = text;
       thread.lastAt = Date.now();
       dmView.setThreads(threads);
-      say(hosts.messages, mode === "sessiz" ? "Kuyruğa girdi; 10 dakikaya kadar yayınlanır." : "Gönderildi.");
+      say(hosts.messages, mode === "silent" ? "Queued; it publishes within 10 minutes." : "Sent.");
     },
   });
 
@@ -346,9 +346,9 @@ async function boot(): Promise<void> {
     if (demo === null) {
       notice(
         hosts.messages,
-        "Konuşma yok",
-        "1:1 mesaj bir kimlik ve zarf taşıması ister; bu yapıda henüz bağlı değil. Odalar açık.",
-        { label: "odalara git", run: () => show("rooms") },
+        "No conversations",
+        "1:1 messaging needs an identity and an envelope transport; neither is wired in this build. Rooms are open.",
+        { label: "go to rooms", run: () => show("rooms") },
       );
       return;
     }
@@ -367,7 +367,7 @@ async function boot(): Promise<void> {
       void publishListing(value);
     },
     onMessage: () => {
-      say(hosts.listings, "İlan sahibine mesaj için önce bir konuşma gerekir.");
+      say(hosts.listings, "Messaging the owner needs a conversation first.");
     },
     onClose: (item) => {
       void removeListing(item);
@@ -395,8 +395,8 @@ async function boot(): Promise<void> {
       listingsView.setItems(listings);
       ready(hosts.listings);
     } catch (error) {
-      notice(hosts.listings, "İlanlar açılmadı", describe(error), {
-        label: "yeniden dene",
+      notice(hosts.listings, "Listings did not open", describe(error), {
+        label: "try again",
         run: () => void loadListings(),
       });
     }
@@ -418,7 +418,7 @@ async function boot(): Promise<void> {
       ];
       listingsView.setItems(listings);
       listingsView.showList();
-      say(hosts.listings, "İlan yayında.");
+      say(hosts.listings, "Listing is live.");
       return;
     }
 
@@ -428,7 +428,7 @@ async function boot(): Promise<void> {
       // over exactly the bytes that will be sent.
       const payloadHash = sha256(paddedBody(value.body));
       const ticket = await challenge(ownerToken, payloadHash);
-      say(hosts.listings, "Kanıt hesaplanıyor…");
+      say(hosts.listings, "Computing proof…");
       const nonce = await solve(payloadHash, ticket.bits);
       await createListing({
         title: value.title,
@@ -440,7 +440,7 @@ async function boot(): Promise<void> {
         bits: ticket.bits,
         priceCents: value.price,
       });
-      say(hosts.listings, "İlan yayında.");
+      say(hosts.listings, "Listing is live.");
       await loadListings();
       listingsView.showList();
     } catch (error) {
@@ -453,12 +453,12 @@ async function boot(): Promise<void> {
       listings = listings.filter((row) => row.id !== item.id);
       listingsView.setItems(listings);
       listingsView.showList();
-      say(hosts.listings, "İlan kapatıldı.");
+      say(hosts.listings, "Listing closed.");
       return;
     }
     try {
       await closeListing(item.id, deriveOwnToken(identity.seed, identity.nextI));
-      say(hosts.listings, "İlan kapatıldı.");
+      say(hosts.listings, "Listing closed.");
       await loadListings();
       listingsView.showList();
     } catch (error) {
@@ -476,7 +476,7 @@ async function boot(): Promise<void> {
       roomsView.setMessages([]);
       dmView.clear();
       listingsView.setItems([]);
-      say(hosts.rooms, "Kimlik silindi. Yeni bir kimlik için sayfayı yenile.");
+      say(hosts.rooms, "Identity deleted. Reload the page for a new one.");
       show("rooms");
     },
   });
@@ -486,7 +486,7 @@ async function boot(): Promise<void> {
   if (fingerprint !== null) shell.setIdentity({ fingerprint });
 
   const identityHead = el(doc, "div", "zf-identity-head");
-  const close = el(doc, "button", "zf-identity-close", "kapat");
+  const close = el(doc, "button", "zf-identity-close", "close");
   close.type = "button";
   close.addEventListener("click", () => show("rooms"));
   identityHead.append(close);

@@ -1,5 +1,5 @@
 /**
- * Two modes, chosen by the writer (scope v5 §"İki mod — varsayılan hızlı").
+ * Two modes, chosen by the writer (scope v5 §"two modes — fast by default").
  *
  * A chat has no single right answer: one person wants to speak now, another
  * wants not to be seen speaking. So the choice is explicit:
@@ -12,7 +12,7 @@
  *
  * `DEFAULT_MODE` is `silent`: it is the fail-safe for a request that carries no
  * usable choice, and the safe direction for a privacy switch is the slower one.
- * The application itself opens in `fast` (scope v5: "varsayılan hızlı"), and
+ * The application itself opens in `fast` (scope v5: "fast by default"), and
  * passes that choice in explicitly, so a product decision never hides inside a
  * fallback.
  *
@@ -69,17 +69,17 @@ export function chooseMode(requested?: unknown): Mode {
 }
 
 /**
- * One Turkish line, suitable for a label next to the switch.
+ * One line of copy, suitable for a label next to the switch.
  *
  * The percentage is scope v5's own copy (lines 75 and 78) and it describes the
  * decoy set, not a measured anonymity guarantee: four decoys plus the message
  * is a 1-in-5 set, and 120 is a 1-in-120 set. Fast mode is never sold as
- * equally private — its sentence says "hemen gider" first.
+ * equally private — its sentence says "goes out at once" first.
  */
 export function describeMode(mode: Mode): string {
   return mode === "fast"
-    ? "yazma anın ~%80 gizli, mesaj hemen gider"
-    : "yazma anın ~%99 gizli";
+    ? "your write moment ~80% hidden, the message goes out at once"
+    : "your write moment ~99% hidden";
 }
 
 export interface ModeChoice {
@@ -94,7 +94,7 @@ export interface ModeChoice {
 export interface ModeSwitch {
   current(): Mode;
   choose(requested: unknown): ModeChoice;
-  /** Test hook and "unuttum" path; not reachable from storage because there is none. */
+  /** Test hook and "forgot it" path; not reachable from storage because there is none. */
   reset(): void;
 }
 

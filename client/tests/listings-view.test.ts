@@ -1,10 +1,10 @@
 /**
- * İlanlar yüzeyi testleri.
+ * Listings surface tests.
  *
- * Yüzey gerçek DOM'a karşı yazılmıştır ama testler küçük bir sahte DOM'a
- * karşı koşar: bu depoda jsdom yok, ve sınanan şey tarayıcının kendisi değil,
- * yüzeyin kurduğu yapı — hangi düğme çizilir, hangi metin okunur, hangi
- * doğrulama reddeder.
+ * The surface is written against the real DOM, but these tests run against a
+ * small fake DOM: there is no jsdom in this repo, and what is under test is not
+ * the browser but the structure the surface builds — which button is drawn,
+ * which text is read, which validation refuses.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,7 +27,7 @@ import {
   type ListingItem,
 } from "../src/ui/listings";
 
-/* --------------------------------------------------------------- sahte DOM */
+/* ---------------------------------------------------------------- fake DOM */
 
 interface FakeEvent {
   preventDefault(): void;
@@ -118,16 +118,16 @@ function mountPoint(): FakeElement {
 
 const asRoot = (element: FakeElement): HTMLElement => element as unknown as HTMLElement;
 
-/* ------------------------------------------------------------------ veri */
+/* -------------------------------------------------------------------- data */
 
 function listing(overrides: Partial<ListingItem> = {}): ListingItem {
   return {
     id: "l1",
-    title: "Ceviz masa",
-    body: "Altı kişilik, sağlam.",
+    title: "Walnut table",
+    body: "Seats six, solid.",
     price: 250000,
     currency: "TRY",
-    category: "ev",
+    category: "home",
     day: "2026-11-20",
     ...overrides,
   };
@@ -136,30 +136,30 @@ function listing(overrides: Partial<ListingItem> = {}): ListingItem {
 const byField = (name: string) => (element: FakeElement) => element.dataset.field === name;
 const byRole = (name: string) => (element: FakeElement) => element.dataset.role === name;
 
-/* ------------------------------------------------------------------ fiyat */
+/* ------------------------------------------------------------------- price */
 
 describe("parsePrice", () => {
-  it("reads Turkish grouping and kuruş", () => {
-    expect(parsePrice("1.250,50")).toEqual({ ok: true, cents: 125050 });
-    expect(parsePrice("1.000.000")).toEqual({ ok: true, cents: 100000000 });
+  it("reads English grouping and cents", () => {
+    expect(parsePrice("1,250.50")).toEqual({ ok: true, cents: 125050 });
+    expect(parsePrice("1,000,000")).toEqual({ ok: true, cents: 100000000 });
     expect(parsePrice("1250")).toEqual({ ok: true, cents: 125000 });
-    expect(parsePrice("0,5")).toEqual({ ok: true, cents: 50 });
+    expect(parsePrice("0.5")).toEqual({ ok: true, cents: 50 });
   });
 
-  it("treats an empty field as takas, not as zero", () => {
+  it("treats an empty field as trade, not as zero", () => {
     expect(parsePrice("")).toEqual({ ok: true, cents: null });
     expect(parsePrice("   ")).toEqual({ ok: true, cents: null });
   });
 
-  it("refuses a dot decimal, a negative and letters instead of guessing", () => {
-    expect(parsePrice("12.34").ok).toBe(false);
+  it("refuses the old Turkish spelling, a negative and letters instead of guessing", () => {
+    expect(parsePrice("1.250,50").ok).toBe(false);
     expect(parsePrice("-5").ok).toBe(false);
     expect(parsePrice("abc").ok).toBe(false);
-    expect(parsePrice("1,234").ok).toBe(false);
+    expect(parsePrice("1.5.0").ok).toBe(false);
   });
 });
 
-/* ---------------------------------------------------------------- filtre */
+/* ------------------------------------------------------------------ filter */
 
 describe("filterFromForm", () => {
   it("drops empty fields instead of sending empty bounds", () => {
@@ -167,11 +167,11 @@ describe("filterFromForm", () => {
   });
 
   it("keeps a real query, a category and both bounds", () => {
-    const filter = filterFromForm({ q: " masa ", category: "ev", min: "1.000", max: "3.000,50" });
+    const filter = filterFromForm({ q: " table ", category: "home", min: "1,000", max: "3,000.50" });
 
     expect(filter).toEqual({
-      q: "masa",
-      category: "ev",
+      q: "table",
+      category: "home",
       minPrice: 100000,
       maxPrice: 300050,
     } satisfies ListingFilter);
@@ -184,8 +184,8 @@ describe("filterFromForm", () => {
 
 describe("empty and collapse helpers", () => {
   it("names the reason an empty list is empty", () => {
-    expect(emptyMessage(false)).toContain("Henüz ilan yok");
-    expect(emptyMessage(true)).toContain("filtreye uyan");
+    expect(emptyMessage(false)).toContain("No listings yet");
+    expect(emptyMessage(true)).toContain("matches this filter");
   });
 
   it("flips the mobile collapse class", () => {
@@ -201,7 +201,7 @@ describe("empty and collapse helpers", () => {
   });
 });
 
-/* ------------------------------------------------------------------ liste */
+/* --------------------------------------------------------------------- list */
 
 describe("listing rows", () => {
   it("renders title, price, category chip and day — and no seller", () => {
@@ -213,39 +213,39 @@ describe("listing rows", () => {
     if (!row) return;
 
     expect(row.children).toHaveLength(4);
-    expect(row.find((element) => element.className === "listing-title")?.textContent).toBe("Ceviz masa");
-    expect(row.find((element) => element.className === "listing-price")?.textContent).toBe("₺2.500,00");
-    expect(row.find((element) => element.className === "listing-category")?.textContent).toBe("Ev ve yaşam");
+    expect(row.find((element) => element.className === "listing-title")?.textContent).toBe("Walnut table");
+    expect(row.find((element) => element.className === "listing-price")?.textContent).toBe("₺2,500.00");
+    expect(row.find((element) => element.className === "listing-category")?.textContent).toBe("Home");
     expect(row.find((element) => element.className === "listing-day")?.textContent).toBe("2026-11-20");
     expect(root.find((element) => element.className.includes("seller"))).toBeUndefined();
-    expect(root.text()).not.toContain("Satıcı");
+    expect(root.text()).not.toContain("Seller");
   });
 
-  it("prints a barter listing as takas, with the muted class", () => {
+  it("prints a barter listing as trade, with the muted class", () => {
     const root = mountPoint();
     renderListingList(asRoot(root), [listing({ price: null })], {}, () => {});
 
     const price = root.find((element) => element.className.includes("listing-price"));
-    expect(price?.textContent).toBe("takas");
-    expect(price?.className).toContain("takas");
+    expect(price?.textContent).toBe("trade");
+    expect(price?.className).toContain("trade");
   });
 
   it("says why the list is empty, and changes the sentence once a filter is set", () => {
     const plain = mountPoint();
     renderListingList(asRoot(plain), [], {}, () => {});
-    expect(plain.find((element) => element.className === "empty")?.textContent).toContain("İlk ilanı sen ver");
+    expect(plain.find((element) => element.className === "empty")?.textContent).toContain("Post the first one");
 
     const filtered = mountPoint();
-    renderListingList(asRoot(filtered), [], { q: "masa" }, () => {});
-    expect(filtered.find((element) => element.className === "empty")?.textContent).toContain("filtreye uyan");
+    renderListingList(asRoot(filtered), [], { q: "table" }, () => {});
+    expect(filtered.find((element) => element.className === "empty")?.textContent).toContain("matches this filter");
   });
 });
 
 describe("listings view — filtering", () => {
   const items = [
-    listing({ id: "a", title: "Ceviz masa", category: "ev", price: 250000 }),
-    listing({ id: "b", title: "Bisiklet", body: "Şehir bisikleti", category: "diger", price: null }),
-    listing({ id: "c", title: "Masa lambası", category: "ev", price: 45000 }),
+    listing({ id: "a", title: "Walnut table", category: "home", price: 250000 }),
+    listing({ id: "b", title: "Bicycle", body: "City bike", category: "other", price: null }),
+    listing({ id: "c", title: "Table lamp", category: "home", price: 45000 }),
   ];
 
   function view() {
@@ -259,7 +259,7 @@ describe("listings view — filtering", () => {
   it("renders every row and a tabular count", () => {
     const { mount } = view();
     expect(mount.findAll((element) => element.className === "listing")).toHaveLength(3);
-    expect(mount.find((element) => element.className === "listings-count")?.textContent).toBe("3 ilan");
+    expect(mount.find((element) => element.className === "listings-count")?.textContent).toBe("3 listings");
   });
 
   it("narrows on a search term as it is typed", () => {
@@ -268,11 +268,11 @@ describe("listings view — filtering", () => {
     expect(search).toBeDefined();
     if (!search) return;
 
-    search.value = "masa";
+    search.value = "table";
     search.fire("input");
 
     expect(mount.findAll((element) => element.className === "listing")).toHaveLength(2);
-    expect(mount.find((element) => element.className === "listings-count")?.textContent).toBe("2 ilan");
+    expect(mount.find((element) => element.className === "listings-count")?.textContent).toBe("2 listings");
   });
 
   it("narrows on a category", () => {
@@ -281,14 +281,14 @@ describe("listings view — filtering", () => {
     expect(select).toBeDefined();
     if (!select) return;
 
-    select.value = "ev";
+    select.value = "home";
     select.fire("change");
 
     const rows = mount.findAll((element) => element.className === "listing");
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.find((element) => element.className === "listing-title")?.textContent)).toEqual([
-      "Ceviz masa",
-      "Masa lambası",
+      "Walnut table",
+      "Table lamp",
     ]);
   });
 
@@ -298,7 +298,7 @@ describe("listings view — filtering", () => {
     expect(min).toBeDefined();
     if (!min) return;
 
-    min.value = "1.000";
+    min.value = "1,000";
     min.fire("input");
 
     const rows = mount.findAll((element) => element.className === "listing");
@@ -324,7 +324,7 @@ describe("listings view — filtering", () => {
   });
 });
 
-/* ------------------------------------------------------------------ detay */
+/* ------------------------------------------------------------------- detail */
 
 describe("listing detail", () => {
   it("shows title, body, price, day and the 1:1 bridge", () => {
@@ -332,12 +332,12 @@ describe("listing detail", () => {
     const onMessage = vi.fn();
     renderListingDetail(asRoot(root), listing(), { onMessage });
 
-    expect(root.find((element) => element.className === "detail-title")?.textContent).toBe("Ceviz masa");
-    expect(root.find((element) => element.className === "detail-body")?.textContent).toBe("Altı kişilik, sağlam.");
+    expect(root.find((element) => element.className === "detail-title")?.textContent).toBe("Walnut table");
+    expect(root.find((element) => element.className === "detail-body")?.textContent).toBe("Seats six, solid.");
     expect(root.find((element) => element.className === "detail-day")?.textContent).toBe("2026-11-20");
 
     const message = root.find(byRole("message"));
-    expect(message?.textContent).toBe("Mesaj gönder");
+    expect(message?.textContent).toBe("Send message");
     message?.click();
     expect(onMessage).toHaveBeenCalledTimes(1);
   });
@@ -346,7 +346,7 @@ describe("listing detail", () => {
     const root = mountPoint();
     renderListingDetail(asRoot(root), listing(), {});
     expect(root.find(byRole("close"))).toBeUndefined();
-    expect(root.text()).not.toContain("İlanı kapat");
+    expect(root.text()).not.toContain("Close listing");
   });
 
   it("draws the close button for the owner and reports the click", () => {
@@ -355,7 +355,7 @@ describe("listing detail", () => {
     renderListingDetail(asRoot(root), listing(), { ownerToken: "tok-1", onClose });
 
     const close = root.find(byRole("close"));
-    expect(close?.textContent).toBe("İlanı kapat");
+    expect(close?.textContent).toBe("Close listing");
     close?.click();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -374,10 +374,10 @@ describe("listing detail", () => {
     expect(body?.children).toHaveLength(0);
   });
 
-  it("writes bilinmiyor when the day is missing", () => {
+  it("writes unknown when the day is missing", () => {
     const root = mountPoint();
     renderListingDetail(asRoot(root), listing({ day: "" }), {});
-    expect(root.find((element) => element.className === "detail-day")?.textContent).toBe("bilinmiyor");
+    expect(root.find((element) => element.className === "detail-day")?.textContent).toBe("unknown");
   });
 
   it("opens the detail from the list and hides the list panel", () => {
@@ -397,7 +397,7 @@ describe("listing detail", () => {
   });
 });
 
-/* ------------------------------------------------------------------- form */
+/* --------------------------------------------------------------------- form */
 
 describe("listing form", () => {
   function compose(initial = {}) {
@@ -418,7 +418,7 @@ describe("listing form", () => {
     expect(counter).toBeDefined();
     if (!title || !counter) return;
 
-    title.value = "Masa";
+    title.value = "Desk";
     title.fire("input");
     expect(counter.textContent).toBe("4/120");
 
@@ -434,20 +434,20 @@ describe("listing form", () => {
     const category = form.find(byField("category"));
     if (!title || !body || !category) return;
 
-    title.value = `GİZLİ-BAŞLIK ${"a".repeat(MAX_TITLE)}`;
+    title.value = `SECRET-TITLE ${"a".repeat(MAX_TITLE)}`;
     title.fire("input");
-    body.value = "gövde";
+    body.value = "body text";
     body.fire("input");
-    category.value = "ev";
+    category.value = "home";
     category.fire("change");
 
     form.fire("submit");
 
     const error = form.find((element) => element.dataset.error === "title");
-    expect(error?.textContent).toContain("Başlık");
+    expect(error?.textContent).toContain("Title");
     // Reason + next step: the error copy rule.
-    expect(error?.textContent).toContain("Kısalt");
-    expect(error?.textContent).not.toContain("GİZLİ");
+    expect(error?.textContent).toContain("Shorten");
+    expect(error?.textContent).not.toContain("SECRET");
     expect(title.getAttribute("aria-invalid")).toBe("true");
     expect(onPublish).not.toHaveBeenCalled();
   });
@@ -458,16 +458,16 @@ describe("listing form", () => {
     const body = form.find(byField("body"));
     if (!title || !body) return;
 
-    title.value = "Masa";
+    title.value = "Desk";
     title.fire("input");
-    body.value = "gövde";
+    body.value = "body text";
     body.fire("input");
 
     form.fire("submit");
 
     const error = form.find((element) => element.dataset.error === "category");
-    expect(error?.textContent).toContain("Kategori");
-    expect(error?.textContent).toContain("Listeden seç");
+    expect(error?.textContent).toContain("Category");
+    expect(error?.textContent).toContain("Pick one from the list");
     expect(onPublish).not.toHaveBeenCalled();
   });
 
@@ -478,17 +478,17 @@ describe("listing form", () => {
     const category = form.find(byField("category"));
     if (!title || !body || !category) return;
 
-    title.value = "Masa";
+    title.value = "Desk";
     title.fire("input");
     body.value = "x".repeat(MAX_BODY + 1);
     body.fire("input");
-    category.value = "ev";
+    category.value = "home";
     category.fire("change");
 
     form.fire("submit");
 
     const error = form.find((element) => element.dataset.error === "body");
-    expect(error?.textContent).toContain("Gövde");
+    expect(error?.textContent).toContain("Body");
     expect(error?.textContent).not.toContain("xxxx");
     expect(onPublish).not.toHaveBeenCalled();
   });
@@ -501,24 +501,24 @@ describe("listing form", () => {
     const price = form.find(byField("price"));
     if (!title || !body || !category || !price) return;
 
-    title.value = "Masa";
+    title.value = "Desk";
     title.fire("input");
-    body.value = "gövde";
+    body.value = "body text";
     body.fire("input");
-    category.value = "ev";
+    category.value = "home";
     category.fire("change");
-    price.value = "12.34";
+    price.value = "abc";
     price.fire("input");
 
     form.fire("submit");
 
     const error = form.find((element) => element.dataset.error === "price");
-    expect(error?.textContent).toContain("Fiyat");
-    expect(error?.textContent).not.toContain("12.34");
+    expect(error?.textContent).toContain("Price");
+    expect(error?.textContent).not.toContain("abc");
     expect(onPublish).not.toHaveBeenCalled();
   });
 
-  it("publishes a valid listing with kuruş and the canonical category", () => {
+  it("publishes a valid listing with cents and the canonical category", () => {
     const { mount, form, onPublish } = compose();
     const title = form.find(byField("title"));
     const body = form.find(byField("body"));
@@ -526,55 +526,55 @@ describe("listing form", () => {
     const price = form.find(byField("price"));
     if (!title || !body || !category || !price) return;
 
-    title.value = "  Ceviz masa  ";
+    title.value = "  Walnut table  ";
     title.fire("input");
-    body.value = "Altı kişilik.";
+    body.value = "Seats six.";
     body.fire("input");
-    category.value = "ev";
+    category.value = "home";
     category.fire("change");
-    price.value = "2.500,50";
+    price.value = "2,500.50";
     price.fire("input");
 
     form.fire("submit");
 
     expect(onPublish).toHaveBeenCalledWith({
-      title: "Ceviz masa",
-      body: "Altı kişilik.",
+      title: "Walnut table",
+      body: "Seats six.",
       price: 250050,
-      category: "ev",
+      category: "home",
     });
     expect(form.find((element) => element.dataset.error === "title")?.textContent).toBe("");
   });
 
-  it("publishes takas when the barter box is ticked, whatever is in the price field", () => {
+  it("publishes trade when the barter box is ticked, whatever is in the price field", () => {
     const { mount, form, onPublish } = compose();
     const title = form.find(byField("title"));
     const body = form.find(byField("body"));
     const category = form.find(byField("category"));
-    const takas = form.find(byField("takas"));
+    const trade = form.find(byField("trade"));
     const price = form.find(byField("price"));
-    if (!title || !body || !category || !takas || !price) return;
+    if (!title || !body || !category || !trade || !price) return;
 
-    title.value = "Bisiklet";
+    title.value = "Bicycle";
     title.fire("input");
-    body.value = "Takas olur.";
+    body.value = "Trade is fine.";
     body.fire("input");
-    category.value = "diger";
+    category.value = "other";
     category.fire("change");
     price.value = "999";
     price.fire("input");
-    takas.checked = true;
-    takas.fire("change");
+    trade.checked = true;
+    trade.fire("change");
 
     expect(price.disabled).toBe(true);
 
     form.fire("submit");
 
     expect(onPublish).toHaveBeenCalledWith({
-      title: "Bisiklet",
-      body: "Takas olur.",
+      title: "Bicycle",
+      body: "Trade is fine.",
       price: null,
-      category: "diger",
+      category: "other",
     });
   });
 
@@ -592,8 +592,8 @@ describe("listing form", () => {
       title: "a".repeat(MAX_TITLE),
       body: "b".repeat(MAX_BODY),
       price: "",
-      takas: true,
-      category: "ev",
+      trade: true,
+      category: "home",
     });
     expect(ok.ok).toBe(true);
 
@@ -601,8 +601,8 @@ describe("listing form", () => {
       title: "a".repeat(MAX_TITLE + 1),
       body: "b",
       price: "",
-      takas: true,
-      category: "ev",
+      trade: true,
+      category: "home",
     });
     expect(over.ok).toBe(false);
   });

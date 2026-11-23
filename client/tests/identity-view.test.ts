@@ -149,7 +149,7 @@ describe("identity line", () => {
     expect(fp.textContent).toMatch(/^[a-z2-7]{8}$/);
 
     expect(one(h.mount, "identity-warning").textContent).toBe(LOST_WARNING);
-    expect(h.mount.text()).toContain("Bu satırı kaybedersen kimliğin gider.");
+    expect(h.mount.text()).toContain("If you lose this line, your identity is gone.");
   });
 
   it("derives a different fingerprint per seed and never the line", () => {
@@ -175,7 +175,7 @@ describe("copy", () => {
 
     expect(await h.view.copyLine()).toBe(true);
     expect(h.copies).toEqual([LINE]);
-    expect(one(h.mount, "identity-status").textContent).toBe("Satır kopyalandı.");
+    expect(one(h.mount, "identity-status").textContent).toBe("Line copied.");
   });
 
   it("offers a manual fallback when the clipboard refuses", async () => {
@@ -187,7 +187,7 @@ describe("copy", () => {
     h.view.show(SEED, 7);
 
     expect(await h.view.copyLine()).toBe(false);
-    expect(one(h.mount, "identity-status").textContent).toContain("elle kopyala");
+    expect(one(h.mount, "identity-status").textContent).toContain("copy it by hand");
   });
 
   it("does nothing when there is no identity", async () => {
@@ -207,7 +207,7 @@ describe("import", () => {
     expect(h.view.state().nextI).toBe(7);
     expect(h.view.state().kind).toBe("ready");
     expect(one(h.mount, "identity-line").textContent).toBe(LINE);
-    expect(one(h.mount, "identity-import-status").textContent).toBe("Kimlik içe aktarıldı.");
+    expect(one(h.mount, "identity-import-status").textContent).toBe("Identity imported.");
   });
 
   it("accepts a line pasted in caps, and clears the field", () => {
@@ -227,7 +227,7 @@ describe("import", () => {
     const corrupted = `${LINE.slice(0, 20)}${LINE[20] === "a" ? "b" : "a"}${LINE.slice(21)}`;
     const cases: { text: string; code: string }[] = [
       { text: "", code: "empty" },
-      { text: "selam", code: "prefix" },
+      { text: "hello", code: "prefix" },
       { text: `${LINE.slice(0, 20)}!${LINE.slice(21)}`, code: "charset" },
       { text: LINE.slice(0, -1), code: "length" },
       { text: corrupted, code: "checksum" },
@@ -253,7 +253,7 @@ describe("danger zone", () => {
   it("needs an identity before it can be armed", () => {
     const h = harness();
     expect(h.view.armVanish()).toBe(false);
-    expect(one(h.mount, "identity-danger-status").textContent).toContain("kimlik");
+    expect(one(h.mount, "identity-danger-status").textContent).toContain("identity");
   });
 
   it("is two steps: no confirmation before arming", async () => {
@@ -272,37 +272,37 @@ describe("danger zone", () => {
     expect(h.view.armVanish()).toBe(true);
     expect(one(h.mount, "identity-confirm").hidden).toBe(false);
 
-    const wrong = await h.view.confirmVanish("yok");
+    const wrong = await h.view.confirmVanish("gone");
     expect(wrong).toEqual({ ok: false, reason: "phrase" });
     expect(h.vanished).toHaveLength(0);
     expect(h.view.state().danger).toBe("armed");
     // The instruction is repeated; the typed text is not.
-    expect(one(h.mount, "identity-danger-status").textContent).toBe('Onay için "yok ol" yaz.');
+    expect(one(h.mount, "identity-danger-status").textContent).toBe('Type "vanish" to confirm.');
   });
 
-  it("accepts the phrase in any Turkish casing, once", async () => {
+  it("accepts the phrase in any casing, once", async () => {
     const h = harness();
     h.view.show(SEED, 7);
     h.view.armVanish();
 
-    for (const phrase of ["yok ol", "YOK OL", "Yok Ol", "  yok   ol  ", "YOK OL"]) {
+    for (const phrase of ["vanish", "VANISH", "Vanish", "  vanish  ", "VANISH"]) {
       expect(matchesVanishPhrase(phrase)).toBe(true);
     }
 
-    const result = await h.view.confirmVanish("YOK OL");
+    const result = await h.view.confirmVanish("VANISH");
     expect(result).toEqual({ ok: true });
     expect(h.vanished).toHaveLength(1);
     expect(h.view.state().danger).toBe("confirmed");
     expect(h.view.state().vanished).toBe(true);
-    expect(one(h.mount, "identity-danger-status").textContent).toContain("geri alınamaz");
+    expect(one(h.mount, "identity-danger-status").textContent).toContain("cannot be undone");
 
-    const again = await h.view.confirmVanish("yok ol");
+    const again = await h.view.confirmVanish("vanish");
     expect(again).toEqual({ ok: false, reason: "done" });
     expect(h.vanished).toHaveLength(1);
   });
 
   it("does not treat near-misses as consent", () => {
-    for (const phrase of ["yok ol!", "yokol", "yok", "", "evet", "sil"]) {
+    for (const phrase of ["vanish!", "vanishh", "vani", "", "yes", "delete"]) {
       expect(matchesVanishPhrase(phrase)).toBe(false);
     }
   });
@@ -321,7 +321,7 @@ describe("danger zone", () => {
     expect(await failing.view.confirmVanish(VANISH_PHRASE)).toEqual({ ok: false, reason: "failed" });
     expect(failing.view.state().vanished).toBe(false);
     expect(failing.view.state().danger).toBe("armed");
-    expect(one(failing.mount, "identity-danger-status").textContent).toContain("tamamlanamadı");
+    expect(one(failing.mount, "identity-danger-status").textContent).toContain("did not finish");
   });
 
   it("runs the whole two-step flow from the buttons", async () => {
@@ -333,7 +333,7 @@ describe("danger zone", () => {
     expect(one(h.mount, "identity-confirm").hidden).toBe(false);
 
     const input = one(h.mount, "identity-confirm-input");
-    input.value = "yok ol";
+    input.value = "vanish";
     one(h.mount, "identity-confirm-button").fire("click");
     await settle();
 

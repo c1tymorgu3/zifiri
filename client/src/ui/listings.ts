@@ -1,5 +1,5 @@
 /**
- * Listings UI (scope v5, "İlanlar — iddia dar").
+ * Listings UI (scope v5, "listings — a narrow claim").
  *
  * A listing is permanent and public, so the only claim it makes is the narrow
  * one: there is no account, address, or e-mail behind it. That claim has a
@@ -12,28 +12,28 @@
  */
 /**
  * Categories are canonical slugs, not display text: they travel in filters
- * and URLs. `CATEGORY_LABELS` is the only place the Turkish spelling lives.
+ * and URLs. `CATEGORY_LABELS` is the only place the display spelling lives.
  */
 export const LISTING_CATEGORIES = [
-  "elektronik",
-  "ev",
-  "giyim",
-  "arac",
-  "is",
-  "hizmet",
-  "diger",
+  "electronics",
+  "home",
+  "transport",
+  "clothing",
+  "service",
+  "work",
+  "other",
 ] as const;
 
 export type ListingCategory = (typeof LISTING_CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<ListingCategory, string> = {
-  elektronik: "Elektronik",
-  ev: "Ev ve yaşam",
-  giyim: "Giyim",
-  arac: "Araç",
-  is: "İş",
-  hizmet: "Hizmet",
-  diger: "Diğer",
+  electronics: "Electronics",
+  home: "Home",
+  transport: "Transport",
+  clothing: "Clothing",
+  service: "Service",
+  work: "Work",
+  other: "Other",
 };
 
 /** Server limits; the client refuses before the request is signed. */
@@ -43,13 +43,13 @@ export const MAX_BODY = 8000;
 /**
  * A listing as the API returns it. `day` is a date, not a timestamp: listings
  * keep no clock. A barter listing has no number, so `price` is `null` and is
- * rendered as "takas".
+ * rendered as "trade".
  */
 export interface ListingItem {
   id: string;
   title: string;
   body: string;
-  /** Kuruş. `null` = takas. */
+  /** Cents. `null` = trade. */
   price: number | null;
   /** ISO 4217, e.g. "TRY". */
   currency: string;
@@ -61,18 +61,18 @@ export interface ListingItem {
 export interface ListingFilter {
   q?: string;
   category?: string;
-  /** Kuruş, inclusive. */
+  /** Cents, inclusive. */
   minPrice?: number;
   maxPrice?: number;
 }
 
 /**
- * Turkish-aware fold: "İSTANBUL", "istanbul", "Istanbul" and "ıstanbul" all
- * end up as "istanbul", and the other Turkish letters lose their marks so an
- * ASCII keyboard still finds "Gül" by typing "gul".
+ * Diacritic-insensitive fold: "Cafe", "Café" and "CAFÉ" all end up as "cafe",
+ * and a dotless i (U+0131) collapses onto "i", so an ASCII keyboard still finds
+ * a word it cannot spell.
  *
- * Order matters: `toLocaleLowerCase("tr")` maps "I" → "ı" and "İ" → "i"
- * before the combining dot of the latter is stripped, so neither letter can
+ * Order matters: `toLocaleLowerCase("tr")` maps "I" onto U+0131 and U+0130 onto
+ * "i" before the combining dot of the latter is stripped, so neither letter can
  * survive as a mismatch.
  */
 export function fold(text: string): string {
@@ -87,7 +87,7 @@ export function fold(text: string): string {
 /**
  * Every whitespace-separated word must appear in the title or the body, in any
  * order. A price bound is a numeric claim, so barter listings drop out as soon
- * as one is set — "takas" cannot be compared to 5.000 kuruş.
+ * as one is set — "trade" cannot be compared to 5,000 cents.
  */
 export function filterListings(items: readonly ListingItem[], filter: ListingFilter = {}): ListingItem[] {
   const tokens = (filter.q ?? "")
@@ -127,9 +127,13 @@ function currencyFormatter(currency: string): Intl.NumberFormat | null {
 
   let formatter: Intl.NumberFormat | null;
   try {
-    formatter = new Intl.NumberFormat("tr-TR", { style: "currency", currency });
+    formatter = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    });
   } catch {
-    // Unknown ISO code: fall back to a plain Turkish number plus the code
+    // Unknown ISO code: fall back to a plain grouped number plus the code
     // rather than throwing inside a render loop.
     formatter = null;
   }
@@ -138,18 +142,18 @@ function currencyFormatter(currency: string): Intl.NumberFormat | null {
 }
 
 /**
- * `formatPrice(123456, "TRY")` → "₺123.456,00" on a tr-TR locale.
- * `null` is the barter price and prints as "takas" — the absence of a number
+ * `formatPrice(123456, "TRY")` → "₺1,234.56" on an en-GB locale.
+ * `null` is the barter price and prints as "trade" — the absence of a number
  * is a fact about the listing, not a missing value.
  */
 export function formatPrice(cents: number | null | undefined, currency = "TRY"): string {
-  if (cents === null || cents === undefined) return "takas";
+  if (cents === null || cents === undefined) return "trade";
   if (!Number.isFinite(cents)) return "—";
 
   const amount = cents / 100;
   const formatter = currencyFormatter(currency);
   if (formatter === null) {
-    return `${new Intl.NumberFormat("tr-TR").format(amount)} ${currency}`;
+    return `${new Intl.NumberFormat("en-GB").format(amount)} ${currency}`;
   }
   return formatter.format(amount);
 }
@@ -179,7 +183,7 @@ export function renderListings(
   if (items.length === 0) {
     const empty = doc.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Henüz ilan yok.";
+    empty.textContent = "No listings yet.";
     root.append(empty);
     return;
   }
@@ -201,7 +205,7 @@ export function renderListings(
     title.textContent = listing.title;
 
     const price = doc.createElement("span");
-    price.className = listing.price === null ? "listing-price takas" : "listing-price";
+    price.className = listing.price === null ? "listing-price trade" : "listing-price";
     price.textContent = formatPrice(listing.price, listing.currency);
 
     const category = doc.createElement("span");
@@ -210,7 +214,7 @@ export function renderListings(
 
     const day = doc.createElement("span");
     day.className = "listing-day";
-    day.textContent = listing.day.trim() === "" ? "bilinmiyor" : listing.day;
+    day.textContent = listing.day.trim() === "" ? "unknown" : listing.day;
 
     button.append(title, price, category, day);
     item.append(button);
@@ -267,23 +271,23 @@ export function composeListing(draft: ListingDraft): ComposeResult {
 
   const title = typeof draft.title === "string" ? draft.title.trim() : "";
   if (title === "") {
-    issues.push({ field: "title", code: "empty", message: "Başlık boş olamaz." });
+    issues.push({ field: "title", code: "empty", message: "Title cannot be empty." });
   } else if (codePoints(title) > MAX_TITLE) {
     issues.push({
       field: "title",
       code: "too_long",
-      message: `Başlık en fazla ${MAX_TITLE} karakter olabilir.`,
+      message: `Title can be at most ${MAX_TITLE} characters.`,
     });
   }
 
   const body = typeof draft.body === "string" ? draft.body.trim() : "";
   if (body === "") {
-    issues.push({ field: "body", code: "empty", message: "Gövde boş olamaz." });
+    issues.push({ field: "body", code: "empty", message: "Body cannot be empty." });
   } else if (codePoints(body) > MAX_BODY) {
     issues.push({
       field: "body",
       code: "too_long",
-      message: `Gövde en fazla ${MAX_BODY} karakter olabilir.`,
+      message: `Body can be at most ${MAX_BODY} characters.`,
     });
   }
 
@@ -293,16 +297,16 @@ export function composeListing(draft: ListingDraft): ComposeResult {
       issues.push({
         field: "price",
         code: "not_a_number",
-        message: "Fiyat sayı olmalı; takas için boş bırakın.",
+        message: "Price must be a number; leave it empty for a trade.",
       });
     } else if (!Number.isInteger(draft.price)) {
       issues.push({
         field: "price",
         code: "not_a_number",
-        message: "Fiyat kuruş cinsinden tam sayı olmalı.",
+        message: "Price must be a whole number of cents.",
       });
     } else if (draft.price < 0) {
-      issues.push({ field: "price", code: "negative", message: "Fiyat negatif olamaz." });
+      issues.push({ field: "price", code: "negative", message: "Price cannot be negative." });
     } else {
       price = draft.price;
     }
@@ -310,7 +314,7 @@ export function composeListing(draft: ListingDraft): ComposeResult {
 
   const category = canonicalCategory(typeof draft.category === "string" ? draft.category : "");
   if (category === null) {
-    issues.push({ field: "category", code: "unknown_category", message: "Kategori listede yok." });
+    issues.push({ field: "category", code: "unknown_category", message: "Category is not in the list." });
   }
 
   if (issues.length > 0 || category === null) return { ok: false, issues };
@@ -329,7 +333,7 @@ export function groupByCategory(items: readonly ListingItem[]): CategoryGroup[] 
   const groups = new Map<string, ListingItem[]>();
 
   for (const listing of items) {
-    const key = listing.category.trim() === "" ? "bilinmiyor" : listing.category;
+    const key = listing.category.trim() === "" ? "unknown" : listing.category;
     const existing = groups.get(key);
     if (existing) existing.push(listing);
     else groups.set(key, [listing]);
