@@ -1,0 +1,50 @@
+# Build artifacts.
+/_build/
+/cover/
+/deps/
+/doc/
+/tmp/
+*.beam
+
+# SQLite files: the database, its write-ahead log and its shared-memory index.
+# A committed database is a committed archive of everything anyone ever wrote.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# If the VM crashes it writes its heap to disk, which is exactly the leak
+# plan §5.1 forbids. Never commit one.
+erl_crash.dump
+
+# Archives and packages.
+*.ez
+zifiri-*.tar
+
+# Client dependencies and build output are installed and built, never stored.
+client/node_modules/
+client/dist/
+
+# priv/static is *output*: `make static` copies client/dist into it. The
+# directory survives a clone through .gitkeep, and README.md says so.
+priv/static/assets/
+priv/static/index.html
+
+# Editor / language server state.
+.elixir_ls/
+
+# OS and log noise.
+.DS_Store
+*.log
+
+
+# secrets and runtime state
+pepper
+.env*
+*.db
+*.db-wal
+*.db-shm
+/run/zifiri/*
+hostname
+hs_ed25519_*
+*.onion

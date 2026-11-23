@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.ex eol=lf
+*.exs eol=lf
+*.heex eol=lf
+*.ts eol=lf
+*.json eol=lf
+*.yml eol=lf
+*.sh eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
