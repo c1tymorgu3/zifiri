@@ -6,8 +6,8 @@
 # Three scenarios:
 #
 #   a) `/`          — the shell is drawn: `#app` is populated and the rail has
-#                     exactly three tabs (Odalar / Mesajlar / İlanlar).
-#   b) `/?demo=1`   — the demo badge says "örnek veri", the room list is not
+#                     exactly three tabs (Rooms / Messages / Listings).
+#   b) `/?demo=1`   — the demo badge says "sample data", the room list is not
 #                     empty, and the listing list is not empty.
 #   c) console      — no `CONSOLE`/`Uncaught` line reaches Chrome's log for any
 #                     of those pages.
@@ -202,7 +202,7 @@ else
 
   tabs="$(count_of 'class="zf-tab"' "$WORK/root.html")"
   if [ "$tabs" = "3" ]; then
-    ok "rail has 3 tabs (Odalar / Mesajlar / İlanlar)"
+    ok "rail has 3 tabs (Rooms / Messages / Listings)"
   else
     no "rail has ${tabs} tabs, expected 3"
   fi
@@ -221,20 +221,20 @@ rc=$?
 if [ "$rc" != "0" ]; then
   no "/?demo=1 did not load (chrome exit ${rc})"
 else
-  if grep -q 'data-demo="true"' "$WORK/demo.html" && grep -qF 'örnek veri' "$WORK/demo.html"; then
-    ok 'demo badge is present and reads "örnek veri"'
+  if grep -q 'data-demo="true"' "$WORK/demo.html" && grep -qF 'sample data' "$WORK/demo.html"; then
+    ok 'demo badge is present and reads "sample data"'
   else
-    no 'demo badge is missing (data-demo="true" and the "örnek veri" label must both be there)'
+    no 'demo badge is missing (data-demo="true" and the "sample data" label must both be there)'
   fi
 
   # `> 0` alone would not discriminate: the live path renders its one room
-  # (lobi) even with an empty store. "mahalle" only exists in the fixtures, so
+  # (lobby) even with an empty store. "neighbourhood" only exists in the fixtures, so
   # seeing it is what proves the demo data — not the live path — reached the DOM.
   rooms="$(count_of 'class="zf-room"' "$WORK/demo.html")"
-  if [ "$rooms" -gt 0 ] && grep -q '>mahalle<' "$WORK/demo.html"; then
-    ok "room list has ${rooms} rooms, including the fixture-only \"mahalle\""
+  if [ "$rooms" -gt 0 ] && grep -q '>neighbourhood<' "$WORK/demo.html"; then
+    ok "room list has ${rooms} rooms, including the fixture-only \"neighbourhood\""
   elif [ "$rooms" -gt 0 ]; then
-    no "room list has ${rooms} rooms but not the fixture-only \"mahalle\" — this is the live path, not demo"
+    no "room list has ${rooms} rooms but not the fixture-only \"neighbourhood\" — this is the live path, not demo"
   else
     no "room list is empty"
   fi
