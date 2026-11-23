@@ -1,140 +1,61 @@
 /* ---------------------------------------------------------------------------
-   Application shell — DESIGN.md: "Kamu hizmeti, 2026".
-   Rail of icon+label on desktop, the same list as a bottom tab bar on a phone.
-   Rules, not boxes: the only borders in here are the rail's hairline and the
-   skip link, which is a control.
+   The shell: a fixed index column, a 56px masthead, and the surface.
+
+   The rail is a register, not an icon bar. Rows are 48px, one hairline apart,
+   and the current section is marked by a 2px accent rule in the gutter — the
+   accent never fills a surface, because a filled block would read as a button.
+   Icons are hidden rather than removed: the DOM is not ours to change, and a
+   label the eye can read beats a glyph it has to decode.
    --------------------------------------------------------------------------- */
 
-/*
- * Tokens are declared on the shell as well as on :root. The page may already
- * carry an older palette on :root; re-declaring here means everything inside
- * the shell resolves to DESIGN.md's values no matter which stylesheet loaded
- * last, without editing a file this module does not own.
- */
-:root,
 .zf-shell {
-  --bg: #0b0c0e;
-  --surface: #121417;
-  --fg: #f2f3f5;
-  --muted: #9aa0a8;
-  --line: #24272c;
-  --accent: #e8a33d;
-  --danger: #d9534f;
-  --ok: #4fa86a;
-
-  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
-  /* 12 / 13 / 15 / 18 / 24 / 32 — body 15, line-height 1.6. */
-  --text-12: 0.75rem;
-  --text-13: 0.8125rem;
-  --text-15: 0.9375rem;
-  --text-18: 1.125rem;
-  --text-24: 1.5rem;
-  --text-32: 2rem;
-
-  /* 8px baseline: 4 / 8 / 12 / 16 / 24 / 32 / 48. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
-
-  --rail: 96px;
-  --measure: 1040px;
-  --tap: 44px;
-  --hairline: 1px solid var(--line);
-  --radius: 6px;
-  --dur: 120ms;
-  --ease: ease-out;
-}
-
-.zf-shell {
-  color-scheme: dark;
-  /* A fixed viewport box, not a min-height: with `min-block-size` the 1fr row
-     grows to its content, which is how the composer ended up under the phone
-     tab bar. Scrolling happens inside .zf-main. */
-  block-size: 100dvh;
-  overflow: hidden;
   display: grid;
   grid-template-columns: var(--rail) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: var(--top) minmax(0, 1fr);
   grid-template-areas:
     "rail top"
     "rail main";
-  min-block-size: 100dvh;
+  block-size: 100dvh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: var(--text-15);
-  line-height: 1.6;
-  /* Every clock, count and price in the product lines up on the same grid. */
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  line-height: var(--lh);
   font-variant-numeric: tabular-nums;
 }
 
-.zf-shell *,
-.zf-shell *::before,
-.zf-shell *::after {
-  box-sizing: border-box;
-}
-
-.zf-shell ::selection {
-  background: var(--accent);
-  color: var(--bg);
-}
-
-/* Focus is one ring everywhere: 2px amber, 2px offset. */
-.zf-shell :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* --------------------------------------------------------------- skip link */
-
+/* Skip link: off the top edge until it is focused, then a real control. */
 .zf-skip {
   position: absolute;
   inset-block-start: -100px;
-  inset-inline-start: var(--space-2);
+  inset-inline-start: var(--s-2);
   z-index: 20;
   display: inline-flex;
   align-items: center;
   min-block-size: var(--tap);
-  padding-inline: var(--space-4);
-  border: var(--hairline);
-  border-radius: var(--radius);
+  padding-inline: var(--s-4);
+  border: var(--rule);
   background: var(--surface);
   color: var(--fg);
-  font-size: var(--text-13);
-  font-weight: 500;
+  font-size: var(--t-13);
   text-decoration: none;
-  transition: inset-block-start var(--dur) var(--ease);
 }
 
 .zf-skip:focus-visible {
-  inset-block-start: var(--space-2);
+  inset-block-start: var(--s-2);
 }
 
-/* -------------------------------------------------------------------- rail */
+/* ------------------------------------------------------------------- rail */
 
 .zf-rail {
   grid-area: rail;
-  position: sticky;
-  inset-block-start: 0;
-  align-self: start;
-  display: flex;
-  flex-direction: column;
-  block-size: 100dvh;
-  padding-block: var(--space-2);
-  border-inline-end: var(--hairline);
-  background: var(--bg);
+  min-block-size: 0;
+  overflow-y: auto;
+  border-inline-end: var(--rule);
 }
 
 .zf-rail-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -143,246 +64,179 @@
 .zf-tab {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
   inline-size: 100%;
-  min-block-size: 64px;
-  padding: var(--space-2) var(--space-1);
-  border: 0;
-  /* The rule is always 2px wide and transparent, so marking the active
-     surface never shifts the label by a pixel. */
-  border-inline-start: 2px solid transparent;
-  background: none;
+  min-block-size: var(--row);
+  padding-inline: var(--s-4);
+  border-block-end: var(--rule);
   color: var(--muted);
-  font: inherit;
-  font-size: var(--text-12);
+  font-family: var(--sans);
+  font-size: var(--t-13);
   font-weight: 500;
-  line-height: 1.3;
-  text-align: center;
-  cursor: pointer;
-  transition:
-    color var(--dur) var(--ease),
-    border-color var(--dur) var(--ease),
-    background-color var(--dur) var(--ease);
+  text-align: start;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 
 .zf-tab:hover {
+  background: var(--surface);
   color: var(--fg);
 }
 
-/* One accent per region: the surface you are on. */
+/* The current section is a rule in the gutter, not a highlight block. */
 .zf-tab[aria-current="page"] {
-  color: var(--accent);
-  border-inline-start-color: var(--accent);
+  color: var(--fg);
 }
 
-.zf-tab-icon {
-  display: block;
-  flex: none;
+.zf-tab[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  background: var(--accent);
 }
 
 .zf-tab-label {
-  display: block;
-  overflow-wrap: anywhere;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ------------------------------------------------------------- top strip */
+/* The rail is type-led: the glyphs earned no place. */
+.zf-tab-icon {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- masthead */
 
 .zf-topbar {
   grid-area: top;
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  min-block-size: 48px;
-  padding: var(--space-1) var(--space-8);
-  background: var(--bg);
+  gap: var(--s-4);
+  padding-inline: var(--gut);
+  border-block-end: var(--rule);
+  min-inline-size: 0;
 }
 
-/* The wordmark answers "what is this" before the visitor reads a single row.
-   It is type, not a box: no chip, no shadow, no logo. */
 .zf-brand {
   display: flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--s-3);
   min-inline-size: 0;
-  margin-inline-end: auto;
 }
 
 .zf-brand-name {
-  color: var(--fg);
-  font-size: var(--text-15);
+  font-size: var(--t-15);
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--fg);
 }
 
-/* A hairline, then one sentence at full strength: the claim, not a tagline. */
 .zf-brand-line {
-  padding-inline-start: var(--space-3);
-  border-inline-start: var(--hairline);
-  color: var(--muted);
-  font-size: var(--text-12);
-  letter-spacing: 0.01em;
-  white-space: nowrap;
+  min-inline-size: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The one honest label in demo mode: it says what the data is, nothing more. */
-.zf-badge {
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-12);
-  letter-spacing: 0.02em;
+  font-size: var(--t-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.zf-badge {
+  flex: none;
+  padding-inline-start: var(--s-3);
+  border-inline-start: var(--rule);
+  color: var(--muted);
+  font-size: var(--t-11);
+}
+
+/* The identity is an id, so it is set in the data face. */
 .zf-identity {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
-  gap: var(--space-2);
-  min-block-size: var(--tap);
-  padding: var(--space-1) var(--space-2);
+  gap: var(--s-2);
+  margin-inline-start: auto;
+  padding: var(--s-1) 0;
   border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: end;
-  cursor: pointer;
+  color: var(--fg);
+  text-align: start;
 }
 
-.zf-identity:hover .zf-identity-value {
-  color: var(--accent);
+.zf-identity[data-state="none"] {
+  opacity: 0.5;
 }
 
 .zf-identity-label {
   color: var(--muted);
-  font-size: var(--text-12);
-  font-weight: 500;
+  font-size: var(--t-11);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
 }
 
 .zf-identity-value {
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-13);
-  overflow-wrap: anywhere;
-  transition: color var(--dur) var(--ease);
+  font-family: var(--mono);
+  font-size: var(--t-13);
+  letter-spacing: 0.02em;
 }
 
-.zf-identity[data-state="none"] .zf-identity-value {
-  color: var(--muted);
+button.zf-identity:hover .zf-identity-value {
+  color: var(--accent);
 }
 
 /* ------------------------------------------------------------------- main */
 
 .zf-main {
   grid-area: main;
-  inline-size: 100%;
-  max-inline-size: var(--measure);
-  min-inline-size: 0;
-  margin-inline: auto;
-  padding: var(--space-2) var(--space-8) var(--space-12);
+  min-block-size: 0;
+  padding: 0;
 }
 
-/* The skip link focuses this container; a ring around the whole page is noise. */
-.zf-main:focus-visible {
-  outline: none;
-}
-
-/* ------------------------------------------------------------ phone layout */
+/* ------------------------------------------------------------------ phone */
 
 @media (max-width: 60rem) {
   .zf-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: var(--top) minmax(0, 1fr) auto;
     grid-template-areas:
       "top"
-      "main";
+      "main"
+      "rail";
   }
 
-  .zf-topbar {
-    padding-inline: var(--space-4);
+  .zf-rail {
+    border-inline-end: 0;
+    border-block-start: var(--rule);
   }
 
-  /* On a phone the name alone fills the left half; the sentence would crowd
-     the badge and the fingerprint out of the strip. */
+  .zf-rail-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .zf-tab {
+    justify-content: center;
+    padding-inline: var(--s-2);
+    border-block-end: 0;
+    border-inline-start: var(--rule);
+  }
+
+  .zf-rail-slot:first-child .zf-tab {
+    border-inline-start: 0;
+  }
+
+  .zf-tab[aria-current="page"]::before {
+    inset-block-start: 0;
+    inset-inline: 0;
+    inline-size: auto;
+    block-size: 2px;
+  }
+
   .zf-brand-line {
     display: none;
   }
 
-  .zf-rail {
-    position: fixed;
-    inset-inline: 0;
-    inset-block-end: 0;
-    inset-block-start: auto;
-    z-index: 10;
-    flex-direction: row;
-    block-size: auto;
-    padding-block: 0;
-    padding-block-end: env(safe-area-inset-bottom, 0px);
-    border-inline-end: 0;
-    border-block-start: var(--hairline);
-  }
-
-  .zf-rail-list {
-    flex: 1 1 auto;
-    flex-direction: row;
-    gap: 0;
-  }
-
-  .zf-rail-slot {
-    flex: 1 1 0;
-  }
-
-  .zf-tab {
-    min-block-size: 56px;
-    border-inline-start: 0;
-    /* The rule moves to the top edge of the bar, where the eye already is. */
-    border-block-start: 2px solid transparent;
-  }
-
-  .zf-tab[aria-current="page"] {
-    border-inline-start-color: transparent;
-    border-block-start-color: var(--accent);
-  }
-
-  /* On a phone the fingerprint stays in the top strip, where the brief puts
-     it; only the label is folded away so eight characters fit. */
-  .zf-identity-label {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .zf-identity-value {
-    font-size: var(--text-12);
-  }
-
-  .zf-main {
-    max-inline-size: none;
-    margin-inline: 0;
-    /* The row is 1fr, but a grid item's auto min-size lets content push it
-       past the viewport — and then the composer slides under the tab bar. */
-    min-block-size: 0;
-    overflow-y: auto;
-    padding: var(--space-4) var(--space-4) calc(72px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .zf-shell,
-  .zf-shell *,
-  .zf-shell *::before,
-  .zf-shell *::after {
-    transition-duration: 0ms !important;
-    animation-duration: 0ms !important;
-    scroll-behavior: auto !important;
+  .zf-topbar {
+    padding-inline: var(--s-4);
   }
 }

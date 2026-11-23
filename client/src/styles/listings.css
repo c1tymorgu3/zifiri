@@ -1,227 +1,120 @@
-/*
- * Listings — DESIGN.md "public utility, 2026".
- *
- * Rules, not boxes: separators are 1px `--line`, and a border appears only on
- * inputs and in the destructive zone. Amber means one thing: the primary
- * action. Numbers are tabular mono, because price and day line up under each
- * other.
- *
- * Tokens are scoped to the surface: the module is self-sufficient and does not
- * override the colours of the rest of the page.
- */
+/* ---------------------------------------------------------------------------
+   Listings: a table, read as a table.
+
+   Columns are fixed so the eye can drop down one of them: title | category |
+   day | price. The price and the day are data and take the data face; the
+   category is a word and stays in the text face. Filters are cells in a ruled
+   strip, not a card of inputs, and the new-listing form is a series of ruled
+   lines rather than a boxed panel.
+   --------------------------------------------------------------------------- */
 
 .listings-surface {
-  --bg: #0b0c0e;
-  --surface: #121417;
-  --fg: #f2f3f5;
-  --muted: #9aa0a8;
-  --line: #24272c;
-  --accent: #e8a33d;
-  --danger: #d9534f;
-  --ok: #4fa86a;
-
-  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
-  --measure: 68ch;
-  --row: 56px;
-  --radius: 8px;
-  --step: 8px;
-
-  box-sizing: border-box;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  max-inline-size: var(--measure);
+  block-size: 100%;
+  min-block-size: 0;
+  margin-inline: auto;
 }
-
-.listings-surface *,
-.listings-surface *::before,
-.listings-surface *::after {
-  box-sizing: inherit;
-}
-
-/* ------------------------------------------------------------------ head */
 
 .listings-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
+  gap: var(--s-4);
+  padding: var(--s-6) var(--gut) var(--s-4);
+  border-block-end: var(--rule);
 }
 
 .listings-heading {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-
-/* --------------------------------------------------------------- buttons */
-
-.btn-primary,
-.btn-quiet,
-.btn-danger,
-.listings-filters-toggle,
-.listing-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out;
-}
-
-.btn-primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  /* Always dark text on amber; 600 is reserved for headings. */
-  color: #0b0c0e;
-  font-weight: 500;
-}
-
-.btn-primary:hover {
-  background: #f0b45a;
-  border-color: #f0b45a;
-}
-
-/* A button, not a box: a secondary action carries no frame. */
-.btn-quiet {
-  background: transparent;
-  border: 0;
   color: var(--fg);
+  font-size: var(--t-24);
+  font-weight: 600;
 }
 
-.btn-quiet:hover {
-  background: var(--surface);
+.listings-panel {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
 }
 
-.btn-danger {
-  background: transparent;
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-
-.btn-danger:hover {
-  background: rgba(217, 83, 79, 0.12);
-}
-
-.listings-surface :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ---------------------------------------------------------------- filtre */
+/* ------------------------------------------------------------------ filters */
 
 .listings-filters {
-  display: block;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  border-block-end: var(--rule);
 }
 
-/* Folds on mobile: an underline, not a box — the separator is enough. */
 .listings-filters-toggle {
-  display: none;
-  width: 100%;
-  justify-content: space-between;
-  padding: 0 4px;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--gut);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: var(--t-13);
+  text-align: start;
+  transition: color var(--dur) var(--ease);
+}
+
+.listings-filters-toggle:hover {
   color: var(--fg);
 }
 
 .listings-filters-body {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  border-block-start: var(--rule);
 }
 
 .filter-field {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-4);
+  border-inline-start: var(--rule);
+}
+
+.filter-field:first-child {
+  border-inline-start: 0;
 }
 
 .filter-label {
-  font-size: 12px;
-  font-weight: 500;
   color: var(--muted);
+  font-size: var(--t-11);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
 }
 
-.field-input {
-  width: 100%;
-  min-height: 44px;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+.filter-field input,
+.filter-field select {
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding: 0 0 var(--s-1);
+  border-block-end: 1px solid transparent;
   color: var(--fg);
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.4;
-  transition: border-color 120ms ease-out;
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  transition: border-color var(--dur) var(--ease);
 }
 
-.field-input::placeholder {
-  color: var(--muted);
-  opacity: 1;
-}
-
-.field-input:hover {
-  border-color: #34383f;
-}
-
-.field-input:focus-visible {
-  border-color: var(--accent);
-}
-
-.field-input:disabled {
-  color: var(--muted);
-  background: #0e1013;
-  cursor: not-allowed;
-}
-
-.field-input[aria-invalid="true"] {
-  border-color: var(--danger);
-}
-
-select.field-input {
-  appearance: none;
-  padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
+.filter-field input:focus,
+.filter-field select:focus {
+  border-block-end-color: var(--accent);
 }
 
 .listings-count {
-  margin: 0;
-  padding: 8px 0;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  padding: var(--s-3) var(--gut);
+  border-block-end: var(--rule);
   color: var(--muted);
+  font-size: var(--t-13);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ------------------------------------------------------------------- row */
+/* --------------------------------------------------------------------- rows */
 
 .listings-list {
-  border-top: 1px solid var(--line);
+  min-block-size: 0;
 }
 
 .listings {
@@ -232,20 +125,18 @@ select.field-input {
 
 .listing {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  min-height: var(--row);
-  padding: 0 4px;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr) 168px 96px 112px;
+  align-items: baseline;
+  gap: var(--s-4);
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: var(--s-3) var(--gut);
+  border-block-end: var(--rule);
   color: var(--fg);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 120ms ease-out;
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  text-align: start;
+  transition: background-color var(--dur) var(--ease);
 }
 
 .listing:hover {
@@ -253,83 +144,60 @@ select.field-input {
 }
 
 .listing-title {
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.listing-category {
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
+.listing-day {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--t-11);
+  text-align: end;
+}
+
 .listing-price {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
   color: var(--fg);
-  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--t-13);
+  text-align: end;
 }
 
 .listing-price.trade {
   color: var(--muted);
-  font-weight: 500;
-}
-
-.listing-category,
-.chip {
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.listing-day,
-.detail-day {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 .empty {
-  margin: 0;
-  padding: 24px 4px;
+  padding: var(--s-8) var(--gut);
   color: var(--muted);
-  max-width: var(--measure);
+  font-size: var(--t-13);
 }
 
-/* ---------------------------------------------------------------- detay */
-
-.listings-panel[hidden] {
-  display: none;
-}
-
-.listings-panel {
-  animation: listings-enter 180ms ease-out;
-}
-
-@keyframes listings-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
+/* ------------------------------------------------------------------- detail */
 
 .listing-detail {
-  padding-top: 16px;
+  display: grid;
+  gap: var(--s-3);
+  max-inline-size: 68ch;
+  padding: var(--s-6) var(--gut);
 }
 
 .listing-back {
-  min-height: 44px;
-  padding: 0 12px 0 0;
-  background: transparent;
-  border: 0;
+  justify-self: start;
+  min-block-size: var(--tap);
   color: var(--muted);
+  font-family: var(--sans);
+  font-size: var(--t-13);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition: color var(--dur) var(--ease);
 }
 
 .listing-back:hover {
@@ -337,151 +205,220 @@ select.field-input {
 }
 
 .detail-title {
-  margin: 8px 0;
-  font-size: 24px;
+  color: var(--fg);
+  font-size: var(--t-24);
   font-weight: 600;
-  line-height: 1.25;
-  max-width: var(--measure);
-  overflow-wrap: anywhere;
 }
 
 .detail-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
+.detail-day {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--t-11);
+}
+
+.chip {
+  padding: 1px var(--s-2);
+  border: var(--rule);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--t-11);
 }
 
 .detail-body {
-  margin: 0 0 24px;
-  max-width: var(--measure);
+  color: var(--fg);
+  font-size: var(--t-15);
+  max-inline-size: 68ch;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
+  gap: var(--s-3);
+  margin-block-start: var(--s-4);
+  padding-block-start: var(--s-4);
+  border-block-start: var(--rule);
 }
 
-/* ----------------------------------------------------------------- form */
+/* --------------------------------------------------------------------- form */
 
 .listing-form {
-  padding-top: 16px;
-  max-width: 560px;
+  display: grid;
+  gap: 0;
+  max-inline-size: 68ch;
+  padding: var(--s-4) var(--gut) var(--s-8);
 }
 
 .field {
+  position: relative;
   display: grid;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: var(--s-1);
+  padding-block: var(--s-3);
+  border-block-end: var(--rule);
 }
 
-.field-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-}
-
-.field-area {
-  min-height: 132px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.field-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.field-hint {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.field-check-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.field-check {
-  width: 18px;
-  height: 18px;
-  /* One amber in the zone: the send button. */
-  accent-color: var(--fg);
-}
-
+/* A character count is data: it sits on the label line, at the right edge. */
 .counter {
-  justify-self: end;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  position: absolute;
+  inset-block-start: var(--s-3);
+  inset-inline-end: 0;
   color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--t-11);
 }
 
 .counter.over {
   color: var(--danger);
 }
 
-/* Colour is not the only signal: the overflow is said in words too. */
-.counter.over::after {
-  content: " · over the limit";
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: var(--t-11);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+.field-input {
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding: var(--s-1) 0;
+  border-block-end: 1px solid transparent;
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.field-input:focus {
+  border-block-end-color: var(--accent);
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+}
+
+.field-area {
+  min-block-size: 96px;
+  resize: vertical;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: var(--t-11);
 }
 
 .field-error {
-  margin: 0 0 12px;
-  font-size: 13px;
+  color: var(--danger);
+  font-size: var(--t-11);
+}
+
+.field-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-block-size: var(--tap);
+}
+
+.field-check input {
+  inline-size: 14px;
+  block-size: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.field-check-label {
+  color: var(--fg);
+  font-size: var(--t-13);
+}
+
+/* ----------------------------------------------------------------- controls */
+
+.btn-primary,
+.btn-quiet,
+.btn-danger {
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: var(--rule);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: var(--t-13);
+  font-weight: 500;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.btn-primary {
+  color: var(--fg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  border-color: var(--fg);
+}
+
+.btn-quiet {
+  color: var(--muted);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--muted);
+  color: var(--fg);
+}
+
+.btn-danger {
+  border-color: var(--danger);
   color: var(--danger);
 }
 
-.field-error:empty {
-  display: none;
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--fg);
+  color: var(--fg);
 }
 
-/* ------------------------------------------------------------- mobil */
+/* -------------------------------------------------------------------- phone */
 
-@media (max-width: 720px) {
-  .listings-filters-toggle {
-    display: inline-flex;
-    margin-bottom: 8px;
+@media (max-width: 60rem) {
+  .listings-head {
+    padding: var(--s-4) var(--s-4) var(--s-3);
+  }
+
+  .listings-filters-body.is-collapsed {
+    display: none;
   }
 
   .listings-filters-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .listings-filters-body.is-collapsed {
-    display: none;
+  .filter-field {
+    border-inline-start: 0;
+    border-block-start: var(--rule);
   }
-}
 
-@media (max-width: 560px) {
+  .filter-field:first-child {
+    border-block-start: 0;
+  }
+
   .listing {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "title price"
-      "chip day";
-    height: auto;
-    min-height: var(--row);
-    padding: 8px 4px;
-    row-gap: 2px;
-    align-content: center;
+      "category day";
+    gap: 0 var(--s-4);
+    padding: var(--s-3) var(--s-4);
   }
 
   .listing-title {
@@ -490,30 +427,23 @@ select.field-input {
 
   .listing-price {
     grid-area: price;
-    justify-self: end;
   }
 
   .listing-category {
-    grid-area: chip;
-    justify-self: start;
+    grid-area: category;
   }
 
   .listing-day {
     grid-area: day;
-    justify-self: end;
+    text-align: start;
   }
-}
 
-/* --------------------------------------------------------------- hareket */
+  .listing-detail,
+  .listing-form {
+    padding-inline: var(--s-4);
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .listings-surface,
-  .listings-surface *,
-  .listings-surface *::before,
-  .listings-surface *::after {
-    animation: none !important;
-    transition-property: opacity !important;
-    transition-duration: 0ms !important;
-    scroll-behavior: auto !important;
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

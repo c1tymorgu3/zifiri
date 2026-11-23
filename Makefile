@@ -34,8 +34,14 @@ serve: ## Start Phoenix on http://127.0.0.1:4000
 
 static: ## Copy client/dist into priv/static (served by Plug.Static)
 	@test -d client/dist || { echo "client/dist missing — run 'make client' first" >&2; exit 1; }
-	rm -rf priv/static/assets priv/static/index.html
+	rm -rf priv/static/assets priv/static/index.html client/dist
+	cd client && npm run build
 	cp -R client/dist/. priv/static/
+	# `mix compile` copies priv/static into _build, and the server serves that
+	# copy. Without this line a rebuilt bundle loses to the one in _build and the
+	# browser keeps getting last week's CSS.
+	rm -rf _build/dev/lib/zifiri/priv/static _build/test/lib/zifiri/priv/static
+	@$(MIX) compile >/dev/null && echo "priv/static and _build refreshed"
 
 check: ## Format check, compile and test — what CI runs
 	$(MIX) format --check-formatted

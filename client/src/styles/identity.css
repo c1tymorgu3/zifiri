@@ -1,226 +1,260 @@
 /* ---------------------------------------------------------------------------
-   Identity surface — DESIGN.md: "Kamu hizmeti, 2026".
-   Rules and type, no cards. The only filled area is the backup line, because
-   it is the one string a user copies by hand. The danger zone is a hairline in
-   --danger, not a red box: red fills shout, and this page is already saying
-   "irreversible".
+   The identity sheet: one column of ruled blocks, read top to bottom.
+
+   It is a page you consult, not a settings card. The identity string and the
+   fingerprint are data, so they are set in the data face and left aligned in a
+   single measured column. The destructive block is separated by a rule in the
+   alarm colour, not by a red panel: the colour states the risk, the rule states
+   where the safe part of the page ends.
    --------------------------------------------------------------------------- */
 
 .identity-view {
-  max-width: 66ch;
-  padding: var(--space-6) 0 var(--space-12);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  inline-size: 100%;
+  max-inline-size: 640px;
+  margin-inline: auto;
+  padding: 0 var(--gut) var(--s-12);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  line-height: var(--lh);
 }
 
 .identity-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-bottom: var(--space-3);
-  border-bottom: var(--hairline);
+  padding-block: var(--s-6) var(--s-3);
+  border-block-end: var(--rule);
 }
 
 .identity-head h2 {
-  font-size: var(--text-24);
+  color: var(--fg);
+  font-size: var(--t-24);
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .identity-caption {
   color: var(--muted);
-  font-size: var(--text-12);
-  letter-spacing: 0.04em;
+  font-size: var(--t-11);
+  letter-spacing: var(--track);
   text-transform: uppercase;
 }
 
-/* The backup line: monospace, selectable, broken at any character. */
 .identity-line {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: var(--text-13);
-  line-height: 1.7;
-  letter-spacing: 0.02em;
-  color: var(--fg);
-  background: var(--surface);
-  border: var(--hairline);
+  margin-block: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: var(--rule);
   border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4);
-  word-break: break-all;
-  user-select: all;
-  -webkit-user-select: all;
-}
-
-.identity-line[data-empty="1"] {
-  color: var(--muted);
-  user-select: none;
-  -webkit-user-select: none;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--t-13);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .identity-meta {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
   flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-block-end: var(--s-4);
+  border-block-end: var(--rule);
 }
 
 .identity-fp {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  display: grid;
+  gap: var(--s-1);
 }
 
 .identity-fp-value {
-  font-family: var(--font-mono);
-  font-size: var(--text-15);
-  letter-spacing: 0.08em;
   color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--t-15);
+  letter-spacing: 0.04em;
 }
 
 .identity-copy {
-  margin-left: auto;
-  background: transparent;
-  border: var(--hairline);
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: var(--rule);
   border-radius: var(--radius);
-  padding: 0 var(--space-4);
   color: var(--fg);
+  font-size: var(--t-13);
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-.identity-copy:hover:not(:disabled) {
+.identity-copy:hover {
   border-color: var(--muted);
 }
 
 .identity-status,
-.identity-import-status,
-.identity-danger-status {
-  min-height: 1.2em;
-  font-size: var(--text-13);
+.identity-import-status {
   color: var(--muted);
+  font-size: var(--t-13);
 }
 
-.identity-warning {
-  font-size: var(--text-13);
-  color: var(--muted);
-  max-width: 58ch;
-}
-
-/* -- import ---------------------------------------------------------------- */
-
-.identity-import {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2) var(--space-3);
-  align-items: center;
-  padding-top: var(--space-3);
-  border-top: var(--hairline);
-}
-
-.identity-import > .identity-caption,
-.identity-import > .identity-import-status {
-  grid-column: 1 / -1;
-}
-
-.identity-import-input {
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-13);
-  background: var(--bg);
-  border: var(--hairline);
-  border-radius: var(--radius);
-}
-
-.identity-import-button {
-  background: transparent;
-  border: var(--hairline);
-  border-radius: var(--radius);
-  padding: 0 var(--space-4);
-}
-
-/* -- danger zone ----------------------------------------------------------- */
-
-.identity-danger {
-  margin-top: var(--space-8);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.identity-danger-title {
-  font-size: var(--text-15);
-  font-weight: 600;
-  color: var(--danger);
-}
-
-.identity-danger-body {
-  font-size: var(--text-13);
-  color: var(--muted);
-  max-width: 52ch;
-}
-
-.identity-arm {
-  align-self: flex-start;
-  background: transparent;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
-  color: var(--danger);
-  padding: 0 var(--space-4);
-}
-
-.identity-arm:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-}
-
-.identity-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-top: var(--space-1);
-}
-
-.identity-confirm[hidden] {
+.identity-status:empty,
+.identity-import-status:empty,
+.identity-danger-status:empty {
   display: none;
 }
 
-.identity-confirm-label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: var(--text-13);
+/* A caution is a sentence with a rule beside it, not a tinted box. */
+.identity-warning {
+  max-inline-size: 68ch;
+  margin-block: var(--s-3) 0;
+  padding-inline-start: var(--s-3);
+  border-inline-start: var(--rule);
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
+.identity-import {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+  margin-block-start: var(--s-6);
+  padding-block-start: var(--s-4);
+  border-block-start: var(--rule);
+}
+
+.identity-import-input {
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding: var(--s-2) 0;
+  border-block-end: var(--rule);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--t-13);
+}
+
+.identity-import-input::placeholder {
+  color: var(--muted);
+}
+
+.identity-import-input:focus {
+  border-block-end-color: var(--accent);
+}
+
+.identity-import-button {
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: var(--rule);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-size: var(--t-13);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.identity-import-button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+/* ------------------------------------------------------------- danger zone */
+
+.identity-danger {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+  margin-block-start: var(--s-8);
+  padding-block-start: var(--s-4);
+  border-block-start: 1px solid var(--danger);
+}
+
+.identity-danger-title {
+  color: var(--fg);
+  font-size: var(--t-15);
+  font-weight: 600;
+}
+
+.identity-danger-body {
+  max-inline-size: 68ch;
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
+.identity-danger-status {
+  color: var(--danger);
+  font-size: var(--t-13);
+}
+
+.identity-arm {
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  color: var(--danger);
+  font-size: var(--t-13);
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.identity-arm:hover:not(:disabled) {
+  border-color: var(--fg);
   color: var(--fg);
 }
 
+.identity-confirm {
+  display: grid;
+  gap: var(--s-2);
+  inline-size: 100%;
+  padding-block-start: var(--s-3);
+  border-block-start: var(--rule);
+}
+
+.identity-confirm-label {
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
 .identity-confirm-input {
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  font-family: var(--font-mono);
-  background: var(--bg);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding: var(--s-2) 0;
+  border-block-end: var(--rule);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--t-13);
+}
+
+.identity-confirm-input:focus {
+  border-block-end-color: var(--accent);
 }
 
 .identity-confirm-row {
   display: flex;
-  gap: var(--space-2);
   flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-block-start: var(--s-2);
 }
 
-.identity-confirm-button {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
+.identity-confirm-button,
+.identity-cancel {
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: 1px solid var(--danger);
   border-radius: var(--radius);
-  padding: 0 var(--space-4);
+  color: var(--danger);
+  font-size: var(--t-13);
 }
 
 .identity-cancel {
-  background: transparent;
-  border: var(--hairline);
-  border-radius: var(--radius);
-  padding: 0 var(--space-4);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.identity-cancel:hover {
+  border-color: var(--muted);
   color: var(--fg);
+}
+
+@media (max-width: 60rem) {
+  .identity-view {
+    padding-inline: var(--s-4);
+  }
+
+  .identity-head h2 {
+    font-size: var(--t-24);
+  }
+
+  .identity-meta {
+    flex-direction: column;
+  }
 }

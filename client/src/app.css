@@ -1,69 +1,145 @@
-/* The single entry stylesheet: DESIGN.md tokens, then surfaces.
-   The old styles.css is not linked any more — it carried a blue accent
-   (#7cb8ff) and a card layout that contradicted DESIGN.md, and because it was
-   the only stylesheet linked, none of the surface CSS applied at all. */
+/* ---------------------------------------------------------------------------
+   Entry stylesheet: the token root, then the frame.
 
+   Order is deliberate. tokens.css is the only file that may state a palette
+   value or a type size; everything after it is layout, rhythm and the browser
+   surfaces that are easy to forget (selection, caret, scrollbar).
+
+   Absolute bans, restated where they are easiest to break: no box-shadow, no
+   gradient, no backdrop-filter, no emoji, no radius above 2px, no transition
+   on anything but colour, opacity or transform, nothing longer than 120ms.
+   --------------------------------------------------------------------------- */
+
+@import "./styles/tokens.css";
+@import "./styles/states.css";
 @import "./styles/shell.css";
 @import "./styles/rooms.css";
 @import "./styles/listings.css";
 @import "./styles/dm.css";
-@import "./styles/states.css";
 @import "./styles/identity.css";
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-/* `hidden` is used as a state flag in main.ts; a grid/flex class must not win. */
-[hidden] { display: none !important; }
+/* `hidden` is a state flag the views set; a grid class must never outrank it. */
+[hidden] {
+  display: none !important;
+}
 
-/* 16px root: the rem scale in shell.css is written against it, so --text-15 is
-   15px. Setting the root to 15px silently shrank every step by 6%. */
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
 }
 
 body {
+  min-height: 100dvh;
   margin: 0;
-  padding: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* Not on `html`: a rem font-size on the root resolves against itself, which
-     is how the whole scale ended up 6% small. */
-  font-size: var(--text-15, 0.9375rem);
-  line-height: 1.6;
+  font-family: var(--sans);
+  font-size: var(--t-15);
+  line-height: var(--lh);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
-body { min-height: 100dvh; }
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
 
-h1, h2, h3 { line-height: 1.25; margin: 0; }
-p { margin: 0; }
+p {
+  margin: 0;
+}
 
-button, input, textarea, select {
+button,
+input,
+textarea,
+select {
   font: inherit;
   color: inherit;
-  background: var(--surface, #121417);
-  border: 1px solid var(--line, #24272c);
+  background: none;
+  border: 0;
   border-radius: 0;
 }
 
-button { cursor: pointer; min-height: 44px; padding: 0 16px; }
-button:disabled { opacity: .45; cursor: not-allowed; }
+button {
+  cursor: pointer;
+}
 
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Browser surfaces, themed from the same palette. A default blue selection or
+   a light scrollbar trough is the fastest way to look unfinished.
+   --------------------------------------------------------------------------- */
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+::-moz-selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+::-webkit-scrollbar {
+  inline-size: 10px;
+  block-size: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+input,
+textarea,
+select {
+  caret-color: var(--accent);
+}
+
+/* Keyboard focus stays visible everywhere; it is the one ring the accent owns. */
 :focus-visible {
-  outline: 2px solid var(--accent, #e8a33d);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation: none !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------
-   Entry chrome: the static skeleton in index.html, the panel wrapper each
-   surface lives in, and the two status lines main.ts owns. Everything here is
-   layout and type; colour comes from the tokens above.
+   Boot skeleton — index.html, replaced by main.ts on the first tick.
+   The same grid as the shell, so nothing moves when the real page arrives.
    --------------------------------------------------------------------------- */
 
 .zf-boot {
@@ -75,97 +151,125 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .zf-boot-rail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-2);
-  border-right: var(--hairline);
+  border-inline-end: var(--rule);
 }
 
 .zf-boot-tab {
-  font-size: var(--text-13);
+  display: flex;
+  align-items: center;
+  min-block-size: var(--row);
+  padding-inline: var(--s-4);
+  border-block-end: var(--rule);
   color: var(--muted);
-  padding: var(--space-2) var(--space-3);
+  font-size: var(--t-13);
 }
 
-.zf-boot-tab[aria-current="page"] { color: var(--fg); }
+.zf-boot-tab[aria-current="page"] {
+  color: var(--fg);
+}
 
 .zf-boot-main {
-  padding: var(--space-6);
-  display: grid;
-  place-content: start;
+  padding: var(--s-8) var(--gut);
 }
 
-.zf-boot-note { color: var(--muted); font-size: var(--text-13); }
+.zf-boot-note {
+  color: var(--muted);
+  font-size: var(--t-13);
+}
 
-@media (max-width: 720px) {
-  .zf-boot { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 60rem) {
+  .zf-boot {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
   .zf-boot-rail {
     flex-direction: row;
-    border-right: 0;
-    border-bottom: var(--hairline);
-    padding: var(--space-2) var(--space-3);
+    border-inline-end: 0;
+    border-block-start: var(--rule);
   }
-  .zf-boot-main { padding: var(--space-4); }
+
+  .zf-boot-tab {
+    flex: 1;
+    justify-content: center;
+    border-block-end: 0;
+    border-inline-start: var(--rule);
+  }
+
+  .zf-boot-tab:first-child {
+    border-inline-start: 0;
+  }
 }
+
+/* ---------------------------------------------------------------------------
+   Frame primitives shared by the surface modules.
+   --------------------------------------------------------------------------- */
 
 .zf-main {
   display: flex;
   flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
 }
 
 .zf-panel {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-height: 0;
   flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
 }
 
-/* The view fills the panel, so a surface can put its composer at the bottom of
-   the viewport instead of floating it under the last message. */
+/* A view fills its panel, so a composer can sit on the floor of the viewport
+   instead of drifting under the last message. */
 .zf-view-slot {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
   flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
 }
 
-.zf-state-slot { padding: var(--space-4) 0; }
-
-/* The offline rule sits above the surface, not in a toast: it is a fact about
-   the whole page and it stays until the fact changes. */
-.zf-offline {
-  border-left: 2px solid var(--danger);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-13);
-  color: var(--fg);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+.zf-state-slot {
+  padding: var(--s-4) var(--gut);
 }
 
 .zf-status {
-  min-height: 1.2em;
-  font-size: var(--text-13);
+  min-block-size: 1.2em;
+  padding-inline: var(--gut);
   color: var(--muted);
+  font-size: var(--t-13);
 }
 
-/* An empty status line is not a placeholder: it is 24px of blank between the
-   strip and the surface. It takes space only when it has something to say. */
+/* An empty status is not a placeholder: it takes space only when it speaks. */
 .zf-status:empty {
   display: none;
 }
 
-.zf-identity-slot { position: relative; }
+.zf-identity-slot {
+  position: relative;
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+}
 
 .zf-identity-head {
   display: flex;
   justify-content: flex-end;
-  padding-bottom: var(--space-2);
+  max-inline-size: 640px;
+  margin-inline: auto;
+  padding: var(--s-4) var(--gut) 0;
 }
 
 .zf-identity-close {
-  background: transparent;
-  border: var(--hairline);
+  min-block-size: var(--tap);
+  padding-inline: var(--s-4);
+  border: var(--rule);
   border-radius: var(--radius);
-  padding: 0 var(--space-3);
-  font-size: var(--text-13);
   color: var(--muted);
+  font-size: var(--t-13);
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.zf-identity-close:hover {
+  border-color: var(--muted);
+  color: var(--fg);
 }
