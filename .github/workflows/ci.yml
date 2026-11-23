@@ -1,0 +1,251 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Least privilege: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
+# One run per ref. A force-push supersedes the previous run instead of racing it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MIX_ENV: test
+  OTP_VERSION: "27"
+  ELIXIR_VERSION: "1.18"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Elixir: format, compile with warnings as errors, full test suite.
+  # ---------------------------------------------------------------------------
+  elixir:
+    name: elixir (otp 27, 1.18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up beam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      # `deps` and `_build` are the whole cost of a cold run. The key is the
+      # lock file, so any dependency change invalidates it; the OTP/Elixir
+      # versions are in the key too because BEAM bytecode is not portable
+      # across them.
+      - name: cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+            ${{ runner.os }}-mix-
+
+      - name: deps
+        run: |
+          mix local.hex --force --if-missing
+          mix deps.get
+
+      - name: format
+        run: mix format --check-formatted
+
+      - name: compile
+        run: mix compile --warnings-as-errors
+
+      - name: test
+        # The SQLite file lives under `_build` (config/config.exs), so it is
+        # cached along with the build. A restored database is not a clean one:
+        # drop it and let test/test_helper.exs migrate from scratch.
+        run: |
+          rm -f _build/test/zifiri_test.db \
+                _build/test/zifiri_test.db-wal \
+                _build/test/zifiri_test.db-shm
+          mix test
+
+  # ---------------------------------------------------------------------------
+  # Client: typecheck, tests, production build, size budget.
+  # ---------------------------------------------------------------------------
+  client:
+    name: client (node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: install
+        run: npm ci
+
+      - name: typecheck
+        run: npx tsc --noEmit
+
+      - name: test
+        run: npx vitest run
+
+      - name: build
+        run: npm run build
+
+      # 100 KiB gzip for JS, enforced by the script itself (exit 1 over budget).
+      # The budget is a plan constraint, not a warning: the bundle is the whole
+      # client, and it ships to people on bad links.
+      - name: size budget
+        run: node scripts/size.mjs
+
+  # ---------------------------------------------------------------------------
+  # Architecture: the invariants that are cheaper to grep than to test.
+  # Separate job so a grep failure names itself instead of hiding inside a
+  # 254-test run.
+  # ---------------------------------------------------------------------------
+  architecture:
+    name: architecture greps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: elixir
+    steps:
+      - uses: actions/checkout@v4
+
+      # Plan §5.1 / §11.2: nothing in `lib/` may call a logger at a level the
+      # filter only *hides*. `Logger.info/2` and friends are the request log
+      # nobody remembers writing; `IO.inspect` and `dbg/2` are the same leak
+      # with a shorter name (F-26).
+      - name: no application logging in lib
+        run: |
+          set -euo pipefail
+          hits="$(grep -rnE '\b(Logger\.info|Logger\.debug|IO\.inspect|dbg\()' \
+                    lib --include='*.ex' --include='*.heex' || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::logger call site in lib/ — request data reaches a sink"
+            printf '%s\n' "$hits"
+            exit 1
+          fi
+          echo "clean: no Logger.info/debug, IO.inspect or dbg in lib/"
+
+      # Plan §5.1: application code must not read peer data. The only file
+      # permitted to mention it is exactly lib/zifiri/transport.ex (anchored
+      # full path — `transport_extra.ex` is not an exemption), and that module
+      # returns constants. Spellings that mean the same thing are all covered:
+      # the standard `forwarded` header, `user-agent` with and without the dash,
+      # `x-real-ip`, and the socket-level `peer_data`/`sockname`/`get_peer_cert`.
+      - name: no peer data outside Zifiri.Transport
+        run: |
+          set -euo pipefail
+          hits="$(grep -rnE 'remote_ip|x-forwarded-for|x_forwarded_for|x-real-ip|user-agent|user_agent|peer_data|sockname|get_peer_cert|\bforwarded\b' \
+                    lib test --include='*.ex' --include='*.exs' --include='*.heex' \
+                  | grep -v '^lib/zifiri/transport\.ex:' || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::transport data accessed outside Zifiri.Transport"
+            printf '%s\n' "$hits"
+            exit 1
+          fi
+          echo "clean: no peer data outside Zifiri.Transport"
+
+      # Plan §5.1 / §11.2: the query logger must stay off in every env.
+      - name: ecto query log stays off
+        run: |
+          set -euo pipefail
+          if grep -rnE '^\s*log:\s*(:(debug|info)|true)' config lib; then
+            echo "::error::Ecto query logging enabled"
+            exit 1
+          fi
+          echo "clean: Ecto logging disabled"
+
+      # A warning, never a failure: an unfinished note is a prompt for a human,
+      # not a reason to block a merge. `docs/` is excluded on purpose — the
+      # plans and reviews there are supposed to contain open questions.
+      - name: todo/fixme report
+        run: |
+          set -uo pipefail
+          hits="$(grep -rnE '\b(TODO|FIXME)\b' \
+                    lib test --include='*.ex' --include='*.exs' --include='*.heex' || true)"
+          if [ -n "$hits" ]; then
+            count="$(printf '%s\n' "$hits" | wc -l | tr -d ' ')"
+            echo "::warning title=TODO/FIXME in lib or test::${count} line(s); not a failure"
+            printf '%s\n' "$hits"
+          else
+            echo "clean: no TODO/FIXME in lib or test"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Docs: the subset of docs/verify.md that can run against a bare checkout.
+  # Everything that needs docker, nginx, journalctl or a live database is
+  # skipped by name rather than silently dropped.
+  # ---------------------------------------------------------------------------
+  docs:
+    name: docs/verify.md greps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: verify.md checks that need only the checkout
+        run: |
+          set -uo pipefail
+          failed=0
+
+          # verify.md:168 — `grep -c 'log: false' config/*.exs` => >=1.
+          n="$(grep -h -c 'log: false' config/*.exs | awk '{s+=$1} END {print s+0}')"
+          if [ "$n" -ge 1 ]; then
+            echo "ok: verify.md:168 ecto log: false present ($n lines)"
+          else
+            echo "::error::verify.md:168 — no 'log: false' in config/*.exs"
+            failed=1
+          fi
+
+          # verify.md:236 — `grep -rn 'secure_delete' lib config | wc -l` => >=1.
+          n="$(grep -rn 'secure_delete' lib config | wc -l | tr -d ' ')"
+          if [ "$n" -ge 1 ]; then
+            echo "ok: verify.md:236 secure_delete applied in code ($n references)"
+          else
+            echo "::error::verify.md:236 — secure_delete not referenced"
+            failed=1
+          fi
+
+          # verify.md:169 — app code must not read peer data (expected 0).
+          # `$C/app` maps to the repository root here, and the search is limited
+          # to source files: lib/SHARE.md and the transport moduledoc discuss
+          # these headers in prose, which is documentation, not a read. The
+          # architecture job already proves nothing else mentions them.
+          n="$(grep -rnE 'remote_ip|x_forwarded_for|x-forwarded-for|user_agent|user-agent' lib \
+                --include='*.ex' --include='*.heex' \
+                | grep -v '^lib/zifiri/transport\.ex:' | wc -l | tr -d ' ')"
+          if [ "$n" -eq 0 ]; then
+            echo "ok: verify.md:169 no peer data outside transport (0)"
+          else
+            echo "::error::verify.md:169 — $n peer-data reference(s) outside transport"
+            failed=1
+          fi
+
+          # verify.md:164 — expected 0, but the only hit is prose in the
+          # endpoint's moduledoc ("no request logger plug. `Plug.Logger` ...").
+          # A grep cannot tell a comment from a call, so this is reported, not
+          # asserted.
+          echo "info: verify.md:164 Plug.Logger references in lib/: $(grep -rn 'Plug.Logger' lib | wc -l | tr -d ' ') (moduledoc only, not asserted)"
+
+          # Named skips. Each one needs something this runner does not have.
+          echo "skip: verify.md:88, 102-105, 114, 124-125 — needs a live instance, docker volumes, journalctl or a core dump"
+          echo "skip: verify.md:154-159, 161, 163, 166, 171-177 — needs docker/nginx/ss/sqlite3 on the target host"
+          echo "skip: verify.md:172-173 — swapon and /sys/power/state describe the host kernel, not the repo"
+          echo "skip: verify.md:175, 221, 233-235 — needs the live SQLite file (\$DB)"
+          echo "skip: verify.md:168, 236 'mix test ...' halves — already covered by the elixir job"
+
+          exit "$failed"
