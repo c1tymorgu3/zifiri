@@ -11,8 +11,8 @@ inside a ten-minute bucket, a **4096 B** envelope that never varies, a **71-char
 identity line that carries no public key. A row below is either inside that model or
 explicitly outside it; the rows outside it are named, not softened.
 
-Every claim below comes from the v5 contract, `docs/scope-v5.md`; the `§` numbers in the
-tables are the plan's, and the plan text itself is archived under `docs/arsiv/`. This
+Every claim below comes from the contract in `docs/spec.md`; the `§` numbers in the
+tables are the plan's, and the plan text itself is not published. This
 document holds the test, the threshold, why the claim is load-bearing, and the
 **current** status of each one. If a
 row says "green", the claim was run with the listed command and passed; "red" means it
@@ -169,21 +169,21 @@ These are written in the plan but have no test; today they are intent, not claim
 
 ## 5. Post-decision claims — 2026-11-22 20:28–20:31
 
-The six decisions in `docs/scope-v5.md` turned into claims. The status column is the
+The six decisions in `docs/spec.md` turned into claims. The status column is the
 output of the command run in this session; an unrun row is **None**, never a guess.
 
 | ID | Claim | Why it matters | Test / command | Threshold | Status |
 |---|---|---|---|---|---|
-| C-28 | No published claim against A1 | A claim against the operator is unprovable; the model stops where the operator begins. | `grep -nE 'A1.*%[0-9]' docs/scope-v5.md \| wc -l` | `0` | **Green** (0) |
+| C-28 | No published claim against A1 | A claim against the operator is unprovable; the model stops where the operator begins. | `grep -nE 'A1.*%[0-9]' docs/spec.md \| wc -l` | `0` | **Green** (0) |
 | C-29 | When cover ships, the set against A1 is ≤ k | Cover narrows the set; the text may say "at most k" and nothing stronger. | `cover_test` | set ≤ k; the text says "at most k" | **None** |
 | C-30 | Fast mode is the default | The default is the mode most users get, so it has to be the honest one. | `fast_mode_test` | default fast; p95 < 1 s | **None** |
-| C-31 | "Send hidden" label + live neighbourhood counter | The button states the current neighbourhood instead of burying it in a footnote. | client test | the button reads `anonimlik: N`; N = messages in the last 60 s, min 1 | **None** |
+| C-31 | "Send hidden" label + live neighbourhood counter | The button states the current neighbourhood instead of burying it in a footnote. | client test | the button reads `anonymity: N`; N = messages in the last 60 s, min 1 | **None** |
 | C-32 | The application does not read IP / XFF / user-agent | Not reading the header is stronger than deleting it later. | `mix test test/transport_test.exs` | 2 tests, 0 failures | **Green** (20:29: 2 passed) |
 | C-33 | No code outside `transport.ex` reads these headers | One exemption is a boundary; two are a hole. | `grep -rnE 'remote_ip\|x-forwarded-for' --include='*.ex' lib \| grep -v transport.ex \| wc -l` | `0` | **Green** (0) |
 | C-34 | The nginx access log is off | A proxy log is a complete access record with an address on every line. | `grep -E '^[[:space:]]*access_log' infra/nginx.conf \| grep -vcE 'access_log[[:space:]]+off;'` | `0` | **Green** (5 lines, 5 `off`) |
 | C-35 | A live request leaves the client address in no log | The end-to-end check that the configuration above actually holds. | `docs/verify.md` §12.1/4 | `0` | **None** (the live drill was not run) |
 | C-36 | On onion the server cannot see the client IP | Onion is the only surface where the network layer cannot see the address either. | `docs/verify.md` §12.1 + `infra/tor/torrc` | `0` | **None** |
-| C-37 | No claim against A1 in the clearnet copy | The clearnet text must not promise what the network layer cannot deliver. | text audit (`scope-v5.md` §Claim texts) | no A1 claim appears | **Green (text)** |
+| C-37 | No claim against A1 in the clearnet copy | The clearnet text must not promise what the network layer cannot deliver. | text audit (`spec.md` §Claim texts) | no A1 claim appears | **Green (text)** |
 | C-38 | "Yok ol" zeroes the `.db` and `-wal` within 5 s | Five seconds is a number a user can check with a stopwatch. | `mix test test/vanish_test.exs` | 33 tests, 0 failures | **Green** (20:30: 33 passed) |
 | C-39 | VACUUM is not on the delete path | VACUUM rewrites the file on every delete and breaks the 5 s bound. | `grep -rn 'VACUUM' --include='*.ex' lib \| grep -vc maintenance` | `0` | **Red** — `lib/zifiri/vanish.ex:450` `Repo.query("VACUUM")` |
 | C-40 | `auto_vacuum = INCREMENTAL` | Incremental vacuum shrinks the file at night without touching the delete path. | `grep -rn auto_vacuum --include='*.ex' lib config priv` | matches > 0 and `PRAGMA auto_vacuum` = 2 | **None** — 0 matches, the setting does not exist |
@@ -191,10 +191,10 @@ output of the command run in this session; an unrun row is **None**, never a gue
 | C-42 | Block-level disk rests on LUKS | Block level is a LUKS reduction; the row states the reduction, not a guarantee. | `docs/verify.md` §9 | LUKS; no block-level guarantee | **None** |
 | C-43 | The operator is the moderator; the decision record has `threshold = 1` | The single-key record is stated as it is, not dressed up as multi-party. | `mix test test/mod_test.exs` | 16 tests, 0 failures; `threshold` is 1 | **Green** (20:30: 16 passed) |
 | C-44 | The audit chain catches later edits | The chain makes a later edit visible to anyone holding the head. | `mix test test/mod_test.exs` | edit/delete/reorder are all caught | **Green** (20:30: 16 passed) |
-| C-45 | The audit chain does not prove who decided | Claiming a signer would put a signature claim where there is none. | text audit (`scope-v5.md` §Moderation) | this claim is not made | **Green (text)** |
+| C-45 | The audit chain does not prove who decided | Claiming a signer would put a signature claim where there is none. | text audit (`spec.md` §Moderation) | this claim is not made | **Green (text)** |
 | C-46 | The identity line is 40 B / 64 base32 | A **71-character** line is short enough to copy and carries no public key. | `mix test test/identity_test.exs` | 27 tests, 0 failures | **Green** (20:28: 27 passed) |
 | C-47 | `mailbox_id` is derived from the seed by HKDF | A derived id looks random without the seed and changes with the generation. | `mix test test/identity_test.exs` | matches a reference vector; changes with the generation | **Green** (20:28: 27 passed) |
-| C-48 | "Write it on paper" is not claimed in v1 | 64 characters are not written by hand; claiming it would be a promise the format cannot keep. | text audit (`scope-v5.md` §Identity line) | absent from the v1 copy | **Green (text)** |
+| C-48 | "Write it on paper" is not claimed in v1 | 64 characters are not written by hand; claiming it would be a promise the format cannot keep. | text audit (`spec.md` §Identity line) | absent from the v1 copy | **Green (text)** |
 | C-49 | The v2 word list is 27 words | A 12-word list carries 128 bits and cannot hold a 32-byte seed; **27 words** can. | `identity_test` v2 group | 27 words | **None** (v2 is not written) |
 
 **Reading note.** Row C-38 is green while C-39/C-40 are red/none: deletion today leaves

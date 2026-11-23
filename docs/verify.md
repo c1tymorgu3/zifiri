@@ -8,8 +8,8 @@ The anonymity claim is the first-class claim. What an instance publishes is its
 operator's decision and has no command here; who can be identified does, and every
 heading below carries the same `C-nn` ID as `docs/claims.md`.
 
-- Source: `docs/scope-v5.md` (the current contract); the plan sections cited per row
-  are archived in `docs/arsiv/plan.md`.
+- Source: `docs/spec.md` (the current contract); the plan sections cited per row are
+  not published.
 - This file is the output of §13 **P0**. P0's exit criterion: every row below has a
   command that really runs, and the drill skeleton is green on an empty install.
 - Runtime environment: **Linux host + Docker**, bash. It is not run on Windows; on
