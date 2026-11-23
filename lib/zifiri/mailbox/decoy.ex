@@ -64,11 +64,26 @@ defmodule Zifiri.Mailbox.Decoy do
   # of 1..bucket-4 bytes matches the spread of real messages, and the two bytes
   # used to pick it come from the same `:rand` seam so a seeded test stays
   # deterministic.
+  # The payload has to look like a sealed body, not like noise. A real envelope
+  # is recipient_tag(16) | eph_pk(32) | nonce(12) | ct | tag(16), and `eph_pk`
+  # is an X25519 point: about half of all 32-byte strings are not on the curve,
+  # so a decoy built from raw random bytes is eliminated by a public test. This
+  # one derives a real public key from a throwaway scalar and fills the rest
+  # with random bytes, which is cheaper than Elligator and enough for the claim.
   defp random_envelope(rand) do
     bucket = Mailbox.envelope_bytes()
-    payload_bytes = rem(:binary.decode_unsigned(rand.(2)), bucket - 4) + 1
-    {:ok, envelope, ^bucket} = Zifiri.Envelope.encode(rand.(payload_bytes), bucket)
+    {eph_pk, _eph_sk} = :crypto.generate_key(:ecdh, :x25519)
 
+    head = rand.(16) <> eph_pk <> rand.(12)
+    room = max(bucket - 4 - byte_size(head) - 16, 1)
+    ct_bytes = rem(:binary.decode_unsigned(rand.(2)), room) + 1
+
+    payload = head <> rand.(ct_bytes) <> rand.(16)
+    {:ok, envelope, ^bucket} = Zifiri.Envelope.encode(payload, bucket)
+
+    # A payload that accidentally exceeds the frame would be refused above; the
+    # only way there is a `:rand` seam that returns too much, and that is a test
+    # bug worth failing on rather than silently truncating.
     envelope
   end
 

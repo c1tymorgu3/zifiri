@@ -284,4 +284,20 @@ defmodule Zifiri.MailboxBucketTest do
   defp rows, do: Repo.aggregate(Envelope, :count, :id)
 
   defp now, do: System.system_time(:millisecond)
+
+  test "a decoy's eph_pk is a real X25519 point, not random bytes" do
+    # About half of all 32-byte strings are not on the curve, so a decoy built
+    # from noise is eliminated by a public test. This asserts the fix: key
+    # agreement against each decoy's eph_pk must succeed.
+    for _ <- 1..20 do
+      decoy = Zifiri.Mailbox.Decoy.build()
+      {:ok, payload, _bucket} = Zifiri.Envelope.decode(decoy.envelope)
+
+      assert byte_size(payload) > 60
+      eph_pk = binary_part(payload, 16, 32)
+
+      {_pub, priv} = :crypto.generate_key(:ecdh, :x25519)
+      assert <<_::binary-size(32)>> = :crypto.compute_key(:ecdh, eph_pk, priv, :x25519)
+    end
+  end
 end

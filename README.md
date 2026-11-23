@@ -7,7 +7,7 @@
   <img alt="Elixir 1.20" src="https://img.shields.io/badge/Elixir-1.20-4B275F?style=flat-square&logo=elixir&logoColor=white">
   <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
-  <img alt="703 tests" src="https://img.shields.io/badge/tests-703%20passing-brightgreen?style=flat-square">
+  <img alt="704 tests" src="https://img.shields.io/badge/tests-704%20passing-brightgreen?style=flat-square">
   <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
   <img alt="51 claims" src="https://img.shields.io/badge/claims-36%2F51%20green-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
@@ -136,6 +136,12 @@ finish says so. There are no tombstones and no backups: a backup is a copy you c
 
 ## What it does not hide
 
+The threat model in [docs/spec.md](docs/spec.md) names four classes: the operator, a passive
+observer, a fake user who can pay the proof of work, and someone who reads the content. The
+class that decides whether a plaintext room is anonymous is two of those combined, the reader
+who also watches the network: reading tells them which frames were written, watching tells them
+who was connected. That is why rooms and mail are claimed separately.
+
 <p align="center">
   <img src="assets/threat-model.svg" alt="Five attacker classes: what each one sees and does not" width="100%">
 </p>
@@ -183,7 +189,7 @@ still unproven, because those are the ones a reader should weigh before trusting
 ### Check one yourself
 
 ```bash
-make check                      # 403 backend tests, 0 failures
+make check                      # 404 backend tests, 0 failures
 make client                     # 300 client tests, then the bundle size check
 bash scripts/publish-gate.sh    # no secret, no placeholder, no TODO in the tree
 bash scripts/e2e/run.sh         # a real Chrome posts, reads and deletes against a live server
@@ -304,7 +310,7 @@ Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripp
 
 ```
 lib/zifiri/      6.7k lines of source
-test/            403 tests, 7.9k lines against 6.7k of source
+test/            404 tests, 7.9k lines against 6.7k of source
 client/          vanilla TypeScript, no framework, 300 tests
 infra/           nginx, Dockerfile, compose, onion, systemd units, harden.sh
 scripts/         drills, measurements, e2e, publish gate

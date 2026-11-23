@@ -6,6 +6,9 @@ A claim is not absolute, it is measured: a number means nothing until the
 adversary is defined. This file writes both together. Two numbers stand apart:
 
 - **A2/A3** (passive observer, fake user): 1:1 mail — bucket + decoy, **99.2%**.
+  That number is `1 − 1/120`: the chance that an observer who picks one frame at
+  random picks wrong. It is a property of the padding, not an anonymity set, and
+  it says nothing about how many people were in the batch.
   A plaintext room gets no percentage: its batch is `k`, the number of writers in
   the window (`docs/claims.md` C-50).
 - **A1** (operator): **outside the model**. The design assumes the operator
@@ -20,7 +23,8 @@ adversary is defined. This file writes both together. Two numbers stand apart:
 | A1 operator | database, disk, deploy key. Does not resist a constitutional demand. | **no claim on the time of writing or on IP**; after cover, "set ≤ k". The absence of a writer column is a separate claim (schema test) |
 | A2 passive observer | watches traffic, sees packet size and time | 1:1: bucket padding + decoy, 99.2%. A room: no decoy, the batch is `k` (C-50) |
 | A3 fake user | unlimited keys, can pay PoW, can join the pool | on 1:1 the bucket is filled to a fixed size; a decoy's origin is unknown. A room batch has no filler to hide behind |
-| A4 curious reader | reads the content, infers from style | **no claim** — if the content describes itself there is no fix |
+| A4 curious reader | reads the content, infers from style | **no claim on style** — if the content describes itself there is no fix. What a reader can do to the *batch* is in the row below |
+| A2 + A4 together | reads the room and watches the network | **the class that matters for plaintext rooms.** Reading the text tells them which frames were written; watching the wire tells them who was connected in the window. The batch then narrows to `k`, and `k = 1` leaves only the timing. This is why rooms and mail are claimed separately |
 
 Out of scope: a global passive observer (both ingress and egress), device
 seizure, an adversary who knows the user personally, legal compulsion.
@@ -78,10 +82,15 @@ so its batch is `k` writers and the probability is 1/`k` (C-50).
 | 256 | 99.6% | 1 MB | 147 MB |
 | 1000 | 99.9% | 4 MB | 576 MB |
 
+A recipient fetches whole buckets, not single frames: 480 KB per 10-minute
+bucket, about 69 MB a day if they read continuously. On a phone that is a real
+cost and a real reason to read mail less often than rooms.
+
 **Choice: 120.** 99.2% at 69 MB a day. 99.9% needs 8× the traffic; if that
 money is spent anywhere it goes to code, not to decoys.
 
-Note: this number answers "which message is yours" **for A2/A3**. The question
+Note: this number answers "which message is yours" **for A2/A3** — and it is
+`1 − 1/n`, a miss probability over padded frames, not a count of people. The question
 "who are you" already has no answer — no account, no IP, no session. The two
 questions are separate; on the second the ratio is 100%. For A1 this table does
 not hold (see above).
