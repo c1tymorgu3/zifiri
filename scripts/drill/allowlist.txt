@@ -1,0 +1,46 @@
+# scripts/drill/allowlist.txt
+#
+# write_allowlist.sh izinli kümesi. Kod değil veri: yeni bir yazma yolu
+# meşrulaştırmak için bu dosyaya satır eklenir, betiğe değil.
+#
+# Biçim: <tür> <değer>        (# yorum, boş satır yok sayılır)
+#
+#   file             diff'te izinli dosya
+#   dir              izinli üst dizin (D durumu hariç)
+#   managed          docker'ın yönettiği yol — bilgi, kırmızı değil
+#   tmpfs            diff'te görünürse tmpfs kurulmamış demektir → kırmızı
+#   volume-required  volume'de bulunması gereken dosya
+#   volume-allowed   volume'de izinli dosya adı
+#
+# ${ZIFIRI_DB_DIR} genişletilir (varsayılan: /var/lib/zifiri).
+
+# --- dosyalar: uygulamanın yazmasına izin verilen tek küme (§5.1)
+file ${ZIFIRI_DB_DIR}/zifiri.db
+file ${ZIFIRI_DB_DIR}/zifiri.db-wal
+file ${ZIFIRI_DB_DIR}/zifiri.db-shm
+file ${ZIFIRI_DB_DIR}/err.log
+
+# --- bu dosyaların üst dizinleri
+dir /var
+dir /var/lib
+dir ${ZIFIRI_DB_DIR}
+
+# --- tmpfs zorunlu: diff'te görünmeleri diske yazıldıkları anlamına gelir
+tmpfs /tmp
+tmpfs /run
+
+# --- docker tarafından yönetilen yollar (bilgi)
+managed /etc/hosts
+managed /etc/hostname
+managed /etc/resolv.conf
+managed /dev
+managed /dev/shm
+managed /dev/mqueue
+
+# --- volume içeriği (docker diff volume içini göstermez, §5.2/2)
+volume-required zifiri.db
+volume-required err.log
+volume-allowed zifiri.db
+volume-allowed zifiri.db-wal
+volume-allowed zifiri.db-shm
+volume-allowed err.log

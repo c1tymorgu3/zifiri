@@ -1,0 +1,69 @@
+{
+  "kind": "pow-browser",
+  "measured_at": "2026-11-23T05:13:17.853Z",
+  "bits": 20,
+  "trials": 5,
+  "node": "v24.16.0",
+  "cpu": "13th Gen Intel(R) Core(TM) i3-13100F",
+  "scenarios": {
+    "desktop (1x)": {
+      "factor": 1,
+      "trials": 5,
+      "attempts": [
+        329591,
+        1429449,
+        3304043,
+        1680280,
+        1118884
+      ],
+      "ms_min": 431.6653,
+      "ms_median": 1838.757,
+      "ms_max": 4338.3783,
+      "ms_mean": 2012.4361999999996,
+      "attempts_mean": 1572449.4,
+      "attempts_min": 329591,
+      "attempts_max": 3304043,
+      "hashes_per_s": 781366.0875311228
+    },
+    "phone, 4x slower": {
+      "factor": 4,
+      "trials": 5,
+      "attempts": [
+        329591,
+        1429449,
+        3304043,
+        1680280,
+        1118884
+      ],
+      "ms_min": 1682.3,
+      "ms_median": 7563.9153,
+      "ms_max": 15875.3172,
+      "ms_mean": 7729.800539999999,
+      "attempts_mean": 1572449.4,
+      "attempts_min": 329591,
+      "attempts_max": 3304043,
+      "hashes_per_s": 813707.6199381467
+    },
+    "phone, 8x slower": {
+      "factor": 8,
+      "trials": 5,
+      "attempts": [
+        329591,
+        1429449,
+        3304043,
+        1680280,
+        1118884
+      ],
+      "ms_min": 3259.9139,
+      "ms_median": 13338.4997,
+      "ms_max": 30586.0937,
+      "ms_mean": 15027.011340000001,
+      "attempts_mean": 1572449.4,
+      "attempts_min": 329591,
+      "attempts_max": 3304043,
+      "hashes_per_s": 837132.209151577
+    }
+  },
+  "claim_ms": 250,
+  "passed": false
+}
