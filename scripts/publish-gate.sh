@@ -37,6 +37,8 @@ Extra checks that map to the same checklist
   j  main tree hash equals the snapshot tree hash
   k  SECURITY.md exists
   l  untracked files are listed (each one must be reviewed by hand)
+  m  no placeholder values in tracked files (example.invalid, 0000 0000,
+     CHANGEME, <your-, TODO:)
 EOF
 }
 
@@ -161,7 +163,11 @@ todo_dirs=""
 for d in lib client/src; do [ -d "$d" ] && todo_dirs="$todo_dirs $d"; done
 if [ -n "$todo_dirs" ]; then
   # shellcheck disable=SC2086
-  todos=$(grep -rn 'TODO\|FIXME\|XXX' $todo_dirs --include='*.ex' --include='*.ts' 2>/dev/null || true)
+  raw_todos=$(grep -rnE '\b(TODO|FIXME|XXX)\b' $todo_dirs --include='*.ex' --include='*.ts' 2>/dev/null || true)
+  # "the contract, not a TODO" is prose about the marker, not an open item. A
+  # marker negated by "not" or "no" is a statement that the work is done.
+  todos=$(printf '%s\n' "$raw_todos" |
+    grep -vE '(^|[^[:alnum:]_])(not|no)[[:space:]]+(a[[:space:]]+)?(TODO|FIXME|XXX)' || true)
 else
   todos=""
 fi
@@ -255,6 +261,19 @@ else
   add l INFO "$(printf '%s\n' "$untracked" | grep -c . ) untracked file(s) — review each before committing" "$untracked"
 fi
 
+# m) Placeholder scan: a template value that survived into the tree. README
+# promises "no secret, no placeholder"; this is the check behind that sentence.
+# The gate script and the CI workflow define these patterns, so they are the
+# scanner and not part of the scan.
+placeholder_re='example\.invalid|0000 0000|CHANGEME|changeme|<your-|TODO:'
+capture git grep -nIE "$placeholder_re" -- . ':!scripts/publish-gate.sh' ':!.github/'
+placeholders=$OUT
+if [ -z "$placeholders" ]; then
+  add m PASS "no placeholder values (example.invalid/0000 0000/CHANGEME/<your-/TODO:)"
+else
+  add m FAIL "placeholder values in tracked files" "$placeholders"
+fi
+
 # ------------------------------------------------------------------ report ---
 fails=0
 warns=0
@@ -268,14 +287,14 @@ done
 printf 'zifiri publish gate — %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')"
 printf 'repo: %s\n' "$ROOT"
 printf 'secret scan method: %s\n\n' "$method"
-printf '%-3s %-5s %s\n' "ID" "SONUC" "KONTROL"
-printf '%-3s %-5s %s\n' "---" "-----" "-------"
+printf '%-3s %-5s %s\n' "ID" "STATUS" "CHECK"
+printf '%-3s %-5s %s\n' "---" "------" "-----"
 for i in "${!R_ID[@]}"; do
   printf '%-3s %-5s %s\n' "${R_ID[$i]}" "${R_ST[$i]}" "${R_NAME[$i]}"
 done
 
 if [ "$warns" -gt 0 ] || [ "$fails" -gt 0 ]; then
-  printf '\nAyrıntı\n'
+  printf '\nDetails\n'
   for i in "${!R_ID[@]}"; do
     case ${R_ST[$i]} in
       PASS | INFO | SKIP) continue ;;
@@ -287,7 +306,7 @@ fi
 
 printf '\n'
 if [ "$fails" -gt 0 ]; then
-  printf 'SONUÇ: FAIL (%d fail, %d uyarı) — depoyu public yapma.\n' "$fails" "$warns"
+  printf 'RESULT: FAIL (%d fail, %d warn) — do not publish the repo.\n' "$fails" "$warns"
   exit 1
 fi
 printf 'RESULT: PASS (%d warnings) — tick the rest by hand: docs/verify.md\n' "$warns"
