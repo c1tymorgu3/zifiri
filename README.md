@@ -7,7 +7,7 @@
   <img alt="Elixir 1.20" src="https://img.shields.io/badge/Elixir-1.20-4B275F?style=flat-square&logo=elixir&logoColor=white">
   <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
-  <img alt="680 tests" src="https://img.shields.io/badge/tests-680%20passing-brightgreen?style=flat-square">
+  <img alt="682 tests" src="https://img.shields.io/badge/tests-682%20passing-brightgreen?style=flat-square">
   <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
   <img alt="49 claims" src="https://img.shields.io/badge/claims-34%2F49%20green-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
@@ -22,14 +22,21 @@
 No account, no session, no cookie, no author column. You generate a key in the browser, post,
 and the server keeps a row with no path back to you.
 
+That is a claim about the database, not about the wire. On clearnet an operator can still put a
+request time next to an address; the model starts where they do, and the section below says so
+in the same words the threat model uses.
+
 There are two ways to send, and the faster one is the default.
 
 **Fast** leaves immediately. The only cover is whoever else wrote in the last minute, and the
 button prints that number: with no traffic it reads 1, which is the honest answer, because the
-observer then has one candidate. **Secret send** trades latency for a set. The message joins a
-ten-minute bucket, the bucket fills with decoys to exactly 120 entries, and the whole thing is
-shuffled before anyone reads it. Somebody watching the wire has 120 candidates and no way to
-tell which one you wrote; the button says 120 and ten minutes.
+observer then has one candidate.
+
+**Secret send** trades latency for a set, and today it does that for the room only. The message
+joins a ten-minute bucket, the bucket fills with decoys to exactly 120 entries, and the whole
+thing is shuffled before anyone reads it, so an observer has 120 candidates and no way to tell
+which one you wrote. One-to-one mail still writes straight to its table: C-14 says the bucket
+should cover it, and C-14 is not proven.
 
 Every claim below carries an ID, and every ID has a command that can refute it. If a claim
 cannot be checked, it does not belong in this file.
@@ -83,8 +90,7 @@ cannot be checked, it does not belong in this file.
 
 ## How a write travels
 
-Secret send is the path below. Fast skips the bucket and hands the envelope straight to the
-store, which is why its number is small.
+The diagram is secret send in the room. Fast skips the bucket, and so does one-to-one mail today.
 
 <p align="center">
   <img src="assets/bucket.gif" alt="Three messages arrive, the bucket fills to 120, shuffles, publishes" width="100%">
@@ -134,10 +140,11 @@ finish says so. There are no tombstones and no backups: a backup is a copy you c
 
 Forty-nine claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
 status. [docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so
-they cannot drift apart. As of 2026-11-23, **34 are green, 11 are unproven, 1 is flaky** — the
-file says so row by row, including the four that were red until this week.
+they cannot drift apart. As of 2026-11-23: **34 green, 11 unproven, 1 flaky**, and 3 that say what is *not*
+claimed, which is how 49 rows add up. The file says so row by row.
 
-The eleven below decide whether you can be identified.
+The table below is not the flattering subset. It carries the three system-level claims that are
+still unproven, because those are the ones a reader should weigh before trusting the rest.
 
 | ID | Claim | Status |
 |---|---|---|
@@ -146,11 +153,14 @@ The eleven below decide whether you can be identified.
 | C-04 | A decoy is indistinguishable from a real envelope: 4096 B, same header and padding | Green |
 | C-08 | The one-to-one table has no sender, conversation or account column | Green |
 | C-18 | Erase: `secure_delete`, WAL truncate, `VACUUM`; the body is in neither file | Green |
-| C-20 | No logs at code level: no `Logger`, no `IO.inspect`, no `dbg`, no query logging | Green |
+| C-20 | No body-bearing log: one redacted `Logger.error` in the sweeper, Ecto logging off, no `IO.inspect` | Green |
 | C-24 | `X-Forwarded-For` and `X-Real-IP` are stripped before the application | Green |
 | C-25 | The proof-of-work challenge is single-use and bound to the envelope | Green |
 | C-26 | Chat writes nothing to disk; the room stream lives in RAM | Green |
 | C-32 | The application does not read IP, XFF or user agent | Green |
+| C-14 | One-to-one envelopes also enter the bucket and are completed to 120 | **Unproven**: today they write straight to the table |
+| C-21 | Deployment logs: proxy `access_log off`, container logging off, no core dumps, no swap | **Unproven**: configuration written, never drill-tested |
+| C-36 | On onion the server cannot see the client address | **Unproven**: the onion drill has not been run on a live host |
 | C-47 | `mailbox_id` is derived from the seed by HKDF | Green |
 
 ### Check one yourself
@@ -173,7 +183,7 @@ Three decisions that shaped everything else, each with the alternative we threw 
 published them together. It was a counter, not a set: five is not an anonymity set, and the
 product sat locked until the fifth stranger arrived. A ten-minute bucket filled with decoys
 gives 120 candidates whether one person posts or twenty. 120 is where the set is worth
-something: 99.2% at the measured rate.
+something: 1 − 1/120 is 99.2%, which is arithmetic, not a measurement.
 
 **SQLite, not Postgres.** Postgres writes faster and replicates, and it keeps deleted tuples
 until vacuum, keeps a WAL you archive, and keeps `pg_log` on by default. Every one of those is a
