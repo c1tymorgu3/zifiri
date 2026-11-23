@@ -441,7 +441,7 @@ export function renderComposeForm(root: HTMLElement, options: ComposeFormOptions
   priceLabel.className = "field";
   const priceCaption = doc.createElement("span");
   priceCaption.className = "field-label";
-  priceCaption.textContent = "Price (₺)";
+  priceCaption.textContent = "Price ($)";
   priceLabel.append(priceCaption, price);
   inputs.set("price", price);
   form.append(priceLabel, errorFor("price"));

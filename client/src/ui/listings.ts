@@ -51,7 +51,7 @@ export interface ListingItem {
   body: string;
   /** Cents. `null` = trade. */
   price: number | null;
-  /** ISO 4217, e.g. "TRY". */
+  /** ISO 4217, e.g. "USD". */
   currency: string;
   category: string;
   /** YYYY-MM-DD. */
@@ -142,11 +142,11 @@ function currencyFormatter(currency: string): Intl.NumberFormat | null {
 }
 
 /**
- * `formatPrice(123456, "TRY")` → "₺1,234.56" on an en-GB locale.
+ * `formatPrice(123456, "USD")` → "$1,234.56" on an en-GB locale.
  * `null` is the barter price and prints as "trade" — the absence of a number
  * is a fact about the listing, not a missing value.
  */
-export function formatPrice(cents: number | null | undefined, currency = "TRY"): string {
+export function formatPrice(cents: number | null | undefined, currency = "USD"): string {
   if (cents === null || cents === undefined) return "trade";
   if (!Number.isFinite(cents)) return "—";
 

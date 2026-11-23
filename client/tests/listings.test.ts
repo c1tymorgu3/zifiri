@@ -18,7 +18,7 @@ function listing(overrides: Partial<ListingItem> = {}): ListingItem {
     title: "Wooden table",
     body: "Comes with two chairs, barely used.",
     price: 250000,
-    currency: "TRY",
+    currency: "USD",
     category: "home",
     day: "2026-11-22",
     ...overrides,
@@ -125,28 +125,27 @@ describe("filterListings", () => {
 
 describe("formatPrice", () => {
   it("formats cents as Turkish lira", () => {
-    const text = formatPrice(123456, "TRY");
+    const text = formatPrice(123456, "USD");
     expect(text).toContain("1,234.56");
-    expect(text).toContain("₺");
+    expect(text).toContain("$");
   });
 
   it("prints zero without inventing a price", () => {
-    expect(formatPrice(0, "TRY")).toContain("0.00");
+    expect(formatPrice(0, "USD")).toContain("0.00");
   });
 
   it("says trade when the price is null or absent", () => {
-    expect(formatPrice(null, "TRY")).toBe("trade");
-    expect(formatPrice(undefined, "TRY")).toBe("trade");
+    expect(formatPrice(null, "USD")).toBe("trade");
+    expect(formatPrice(undefined, "USD")).toBe("trade");
   });
 
   it("honours the requested currency", () => {
-    const text = formatPrice(1234, "USD");
-    expect(text).toContain("12.34");
-    expect(text).not.toContain("₺");
+    expect(formatPrice(1234, "USD")).toContain("$12.34");
+    expect(formatPrice(1234, "EUR")).toContain("12.34");
   });
 
-  it("defaults to lira", () => {
-    expect(formatPrice(500)).toContain("5.00");
+  it("defaults to dollars", () => {
+    expect(formatPrice(500)).toContain("$5.00");
   });
 });
 
@@ -223,7 +222,7 @@ describe("renderListings", () => {
     ]);
     expect(button?.children.map((child) => child.textContent)).toEqual([
       "Wooden table",
-      formatPrice(250000, "TRY"),
+      formatPrice(250000, "USD"),
       CATEGORY_LABELS.home,
       "2026-11-22",
     ]);

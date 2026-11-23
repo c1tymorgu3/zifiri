@@ -92,7 +92,7 @@ describe("listings", () => {
   it("creates a listing with a padded envelope and the token only in the header", async () => {
     reply({ status: "created", ref: 12 }, 201);
 
-    const created = await createListing({ ...input, priceCents: 150000, currency: "TRY" });
+    const created = await createListing({ ...input, priceCents: 150000, currency: "USD" });
 
     const { url, init, headers } = call();
     expect(url).toBe("/api/listings");
@@ -106,7 +106,7 @@ describe("listings", () => {
     expect(body.token).toBeUndefined();
     expect(body.title).toBe("Bicycle");
     expect(body.price_cents).toBe(150000);
-    expect(body.currency).toBe("TRY");
+    expect(body.currency).toBe("USD");
     expect(body.category).toBe("transport");
     expect(body.challenge_id).toBe("ch-1");
     expect(body.nonce).toBe(4242);
@@ -158,7 +158,7 @@ describe("listings", () => {
       ref: 5,
       title: "Table",
       price_cents: 90000,
-      currency: "TRY",
+      currency: "USD",
       category: "ev",
       day: "2026-11-22",
       body_b64: toB64(new Uint8Array([1, 2, 3])),

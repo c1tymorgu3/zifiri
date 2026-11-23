@@ -126,7 +126,7 @@ function listing(overrides: Partial<ListingItem> = {}): ListingItem {
     title: "Walnut table",
     body: "Seats six, solid.",
     price: 250000,
-    currency: "TRY",
+    currency: "USD",
     category: "home",
     day: "2026-11-20",
     ...overrides,
@@ -214,7 +214,7 @@ describe("listing rows", () => {
 
     expect(row.children).toHaveLength(4);
     expect(row.find((element) => element.className === "listing-title")?.textContent).toBe("Walnut table");
-    expect(row.find((element) => element.className === "listing-price")?.textContent).toBe("₺2,500.00");
+    expect(row.find((element) => element.className === "listing-price")?.textContent).toBe("$2,500.00");
     expect(row.find((element) => element.className === "listing-category")?.textContent).toBe("Home");
     expect(row.find((element) => element.className === "listing-day")?.textContent).toBe("2026-11-20");
     expect(root.find((element) => element.className.includes("seller"))).toBeUndefined();

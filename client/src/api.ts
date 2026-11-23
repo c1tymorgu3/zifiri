@@ -197,7 +197,7 @@ export async function createListing(input: ListingInput): Promise<CreatedListing
       envelope: toB64(envelope),
       title: input.title,
       price_cents: input.priceCents ?? null,
-      currency: input.currency ?? "TRY",
+      currency: input.currency ?? "USD",
       category: input.category,
       challenge_id: input.challengeId,
       nonce: input.nonce,

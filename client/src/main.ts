@@ -410,7 +410,7 @@ async function boot(): Promise<void> {
           title: value.title,
           body: value.body,
           price: value.price,
-          currency: "TRY",
+          currency: "USD",
           category: value.category,
           day: new Date().toISOString().slice(0, 10),
         },
