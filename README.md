@@ -1,4 +1,17 @@
-<p align="center"><img src="assets/logo.svg" alt="zifiri" width="128"></p>
+<p align="center">
+  <img src="assets/logo.png" alt="zifiri" width="420">
+</p>
+
+<p align="center">
+  <a href="https://github.com/c1tymorgu3/zifiri/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/c1tymorgu3/zifiri/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Elixir 1.20" src="https://img.shields.io/badge/Elixir-1.20-4B275F?style=flat-square&logo=elixir&logoColor=white">
+  <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
+  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
+  <img alt="680 tests" src="https://img.shields.io/badge/tests-680%20passing-brightgreen?style=flat-square">
+  <img alt="bundle 71 KiB gzip" src="https://img.shields.io/badge/bundle-71%20KiB%20gzip-blue?style=flat-square">
+  <img alt="11 claims" src="https://img.shields.io/badge/claims-11%20measured-yellow?style=flat-square">
+  <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
+</p>
 
 # zifiri
 
