@@ -30,8 +30,10 @@ defmodule Zifiri.ApiTest do
   import Plug.Conn, only: [get_resp_header: 2, put_req_header: 3]
   import Plug.Test
 
-  alias Zifiri.{Envelope, Listings, Mailbox, Owner, Pow}
+  alias Zifiri.{Bucket, Envelope, Listings, Mailbox, Owner, Pow}
+  alias Zifiri.Bucket.Publisher
   alias Zifiri.Listings.Listing
+  alias Zifiri.Mailbox.Envelope, as: MailboxEnvelope
   alias Zifiri.Pow.Challenge
   alias Zifiri.JSON
   alias Zifiri.Repo
@@ -41,7 +43,10 @@ defmodule Zifiri.ApiTest do
 
   setup do
     Challenge.clear()
+    :ok = Bucket.reset()
     Repo.delete_all(Listing)
+    Repo.delete_all(MailboxEnvelope)
+    :rand.seed(:exsss, {5, 8, 13})
     :ok
   end
 
@@ -323,7 +328,11 @@ defmodule Zifiri.ApiTest do
 
     delivered = post_json("/api/mailbox/#{tag}", %{"envelope" => Base.encode64(envelope)})
     assert delivered.status == 202
-    assert json(delivered) == %{"status" => "accepted"}
+    assert json(delivered) == %{"status" => "queued"}
+
+    # The envelope is queued, not stored; the publisher's tick closes the
+    # bucket and writes the receipt.
+    assert :ok = publish()
 
     page = request(:get, "/api/mailbox/#{tag}")
     assert page.status == 200
@@ -352,7 +361,11 @@ defmodule Zifiri.ApiTest do
     tag = Mailbox.new_id() |> Mailbox.encode_id()
     envelope = :crypto.strong_rand_bytes(4096)
 
-    assert {:ok, id} = Mailbox.deliver(tag, envelope)
+    delivered = post_json("/api/mailbox/#{tag}", %{"envelope" => Base.encode64(envelope)})
+    assert delivered.status == 202
+    assert :ok = publish()
+
+    assert {:ok, %{envelopes: [%{id: id}]}} = Mailbox.fetch(tag)
 
     stranger = Mailbox.new_id() |> Mailbox.encode_id()
 
@@ -490,6 +503,10 @@ defmodule Zifiri.ApiTest do
   defp padded(json), do: json <> :binary.copy(" ", @response_bytes - byte_size(json))
 
   defp post_json(path, body), do: post_raw(path, JSON.encode(body), "application/json")
+
+  # Closes the bucket with the same tick the publisher's timer runs in
+  # production. Decoys are seeded so a page assertion is reproducible.
+  defp publish, do: Publisher.tick(now_ms: System.system_time(:millisecond), rand: &:rand.bytes/1)
 
   defp post_raw(path, body, content_type \\ nil) do
     conn = conn(:post, path, body)

@@ -9,7 +9,8 @@ defmodule Zifiri.ApiSurfaceTest do
 
   use Zifiri.DataCase, async: false
 
-  alias Zifiri.{Envelope, Owner, Pow}
+  alias Zifiri.{Bucket, Envelope, Owner, Pow}
+  alias Zifiri.Bucket.Publisher
   alias Zifiri.Chat.{Body, Message, Store}
   alias Zifiri.Listings.Listing
   alias Zifiri.Mailbox.Envelope, as: MailboxEnvelope
@@ -25,6 +26,8 @@ defmodule Zifiri.ApiSurfaceTest do
 
   setup do
     isolate()
+    :ok = Bucket.reset()
+    :rand.seed(:exsss, {3, 9, 27})
     Repo.delete_all(Listing)
     Repo.delete_all(MailboxEnvelope)
     Store.reset()
@@ -197,7 +200,9 @@ defmodule Zifiri.ApiSurfaceTest do
       request(:post, "/api/mailbox/#{pk}", %{"envelope" => Base.encode64(envelope)})
 
     assert accepted.status == 202
-    assert json(accepted) == %{"status" => "accepted"}
+    assert json(accepted) == %{"status" => "queued"}
+
+    assert :ok = publish()
 
     page = json(request(:get, "/api/mailbox/#{pk}"))
     assert [%{"id" => id, "envelope_b64" => body}] = page["messages"]
@@ -239,6 +244,9 @@ defmodule Zifiri.ApiSurfaceTest do
     assert request(:post, "/api/mailbox/#{other}", %{"envelope" => Base.encode64(envelope)}).status ==
              202
 
+    # All three writes share one bucket; one tick publishes them together.
+    assert :ok = publish()
+
     [%{"id" => first} | _] = json(request(:get, "/api/mailbox/#{pk}"))["messages"]
 
     assert request(:post, "/api/mailbox/ack", %{"mailbox_id" => pk, "ids" => [first]}).status ==
@@ -263,11 +271,72 @@ defmodule Zifiri.ApiSurfaceTest do
 
     page = json(request(:get, "/api/rooms/lobby?since=0"))
     assert [%{"id" => ^ref, "body" => encoded} | _] = page["messages"]
-    assert {:ok, ^payload, 256} = Envelope.decode(Base.url_decode64!(encoded, padding: false))
+    assert {:ok, ^payload, 1024} = Envelope.decode(Base.url_decode64!(encoded, padding: false))
     assert map_size(page["last_ctr"]) == 1
 
     after_ref = json(request(:get, "/api/rooms/lobby?since=#{ref}"))
     assert after_ref["messages"] == []
+  end
+
+  test "secret mode queues the frame and the bucket publishes 120 entries" do
+    {body, payload} = room_message("sessiz mesaj", 7)
+    body = Map.put(body, "mode", "secret")
+
+    conn = request(:post, "/api/rooms/lobby", body)
+
+    assert conn.status == 202
+    assert json(conn) == %{"status" => "queued"}
+    # Nothing visible until the bucket closes.
+    assert json(request(:get, "/api/rooms/lobby"))["messages"] == []
+
+    assert :ok = publish()
+
+    # One answer is a fixed 16 KiB page, so a 120-entry bucket is read in pages.
+    {ids, bodies} = read_room_pages(0, {[], []})
+    assert length(ids) == 120
+    assert payload in bodies
+  end
+
+  defp read_room_pages(since, {ids, bodies}, tries \\ 200) do
+    if tries == 0 do
+      {ids, bodies}
+    else
+      page = json(request(:get, "/api/rooms/lobby?since=#{since}"))
+      messages = page["messages"]
+
+      if messages == [] do
+        {ids, bodies}
+      else
+        new_ids = Enum.map(messages, & &1["id"])
+
+        decoded =
+          Enum.map(messages, fn m ->
+            {:ok, body, _} = Envelope.decode(Base.url_decode64!(m["body"], padding: false))
+            body
+          end)
+
+        read_room_pages(Enum.max(new_ids), {ids ++ new_ids, bodies ++ decoded}, tries - 1)
+      end
+    end
+  end
+
+  test "silent is accepted as the interface's name for secret" do
+    {body, _payload} = room_message("sessiz takma ad", 9)
+
+    conn = request(:post, "/api/rooms/lobby", Map.put(body, "mode", "silent"))
+
+    assert conn.status == 202
+    assert json(conn) == %{"status" => "queued"}
+  end
+
+  test "an unknown mode is a 400 and writes nothing" do
+    {body, _payload} = room_message("yanlis mod", 11)
+
+    conn = request(:post, "/api/rooms/lobby", Map.put(body, "mode", "turbo"))
+
+    assert conn.status == 400
+    assert json(conn) == %{"error" => "bad_mode"}
+    assert json(request(:get, "/api/rooms/lobby"))["messages"] == []
   end
 
   test "a room message with a bad proof is refused and not stored" do
@@ -370,6 +439,8 @@ defmodule Zifiri.ApiSurfaceTest do
   end
 
   # -- helpers ---------------------------------------------------------------
+
+  defp publish, do: Publisher.tick(now_ms: System.system_time(:millisecond), rand: &:rand.bytes/1)
 
   defp request(method, path, body \\ nil, headers \\ []) do
     conn = Plug.Test.conn(method, path, if(body, do: JSON.encode(body), else: ""))

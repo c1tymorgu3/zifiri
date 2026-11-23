@@ -363,6 +363,8 @@ export interface RoomPostInput {
   sig: Uint8Array;
   ctr: number;
   nonce: number;
+  /** `secret` queues the frame in the ten-minute bucket; `fast` writes now. */
+  mode?: "fast" | "secret";
 }
 
 export interface PostedRoomMessage {
@@ -383,6 +385,7 @@ export async function postRoomMessage(
       sig: toB64Url(input.sig),
       ctr: input.ctr,
       nonce: input.nonce,
+      mode: input.mode ?? "fast",
     },
   });
 }

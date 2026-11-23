@@ -8,15 +8,20 @@ defmodule Zifiri.MailboxTest do
     * the address is random — 10 000 ids, zero collisions, and the collision
       arithmetic written down rather than assumed;
     * the server never receives a public key — a source scan plus the exported
-      function list, so "no pk parameter" is a failing test and not a promise;
+      function list, so \"no pk parameter\" is a failing test and not a promise;
     * the column set — `PRAGMA table_info` says five columns, none of which can
       name a sender, and `recipient_tag` is gone;
     * the cursor — ids that are never reused, because SQLite's default rowid
-      is, and a reused id is a silently skipped message.
+      is, and a reused id is a silently skipped message;
+    * the write path — `deliver/3` queues into `Zifiri.Bucket`; only the
+      publisher's tick writes rows, and it completes the batch to 120. A test
+      that wants to read calls `publish/1`, which runs that same tick.
   """
 
   use Zifiri.DataCase, async: false
 
+  alias Zifiri.Bucket
+  alias Zifiri.Bucket.Publisher
   alias Zifiri.Mailbox
   alias Zifiri.Mailbox.Envelope
   alias Zifiri.Mailbox.Sweeper
@@ -25,6 +30,12 @@ defmodule Zifiri.MailboxTest do
   @ttl_ms 72 * 60 * 60 * 1000
   @bucket 4096
   @id_bytes 16
+
+  setup do
+    :ok = Bucket.reset()
+    :rand.seed(:exsss, {7, 11, 13})
+    :ok
+  end
 
   # A stand-in for a device's mailbox address: 16 random-ish bytes. Not derived
   # from a key — there is no key in this module any more — so the helper takes a
@@ -37,7 +48,35 @@ defmodule Zifiri.MailboxTest do
 
   defp now, do: System.system_time(:millisecond)
 
+  # Total rows, decoys included.
   defp rows, do: Repo.aggregate(Envelope, :count, :id)
+
+  # Rows a named mailbox owns. This is the only count a delivery assertion may
+  # use: the rest of the bucket belongs to nobody.
+  defp rows(mailbox) do
+    Repo.aggregate(from(e in Envelope, where: e.mailbox_id == ^raw_id(mailbox)), :count, :id)
+  end
+
+  defp ids(mailbox) do
+    Repo.all(
+      from e in Envelope,
+        where: e.mailbox_id == ^raw_id(mailbox),
+        order_by: [asc: e.id],
+        select: e.id
+    )
+  end
+
+  defp raw_id(mailbox) do
+    {:ok, raw} = Mailbox.decode_id(mailbox)
+    raw
+  end
+
+  # Closes the bucket: the same synchronous tick the publisher's timer runs.
+  defp publish(now \\ nil) do
+    opts = if now == nil, do: [], else: [now_ms: now]
+    :ok = Publisher.tick(opts)
+    :ok
+  end
 
   # -- delivery and reading ---------------------------------------------------
 
@@ -45,23 +84,27 @@ defmodule Zifiri.MailboxTest do
     alice = mailbox_b64("alice")
     blob = envelope(0xA5)
 
-    assert {:ok, id} = Mailbox.deliver(alice, blob)
-    assert is_integer(id) and id > 0
+    assert {:ok, :queued} = Mailbox.deliver(alice, blob)
+    # No direct write path: nothing is on disk until the bucket closes.
+    assert rows() == 0
+
+    assert :ok = publish()
 
     assert {:ok, %{envelopes: [row], cursor: cursor, more: false}} = Mailbox.fetch(alice)
-    assert row.id == id
     assert row.envelope == blob
     assert byte_size(row.envelope) == @bucket
-    assert cursor == id
+    assert cursor == row.id
     assert row.expires_ms > row.created_ms
   end
 
   test "two deliveries to the same mailbox are two rows, oldest first" do
     alice = mailbox_b64("alice")
 
-    assert {:ok, first} = Mailbox.deliver(alice, envelope(1))
-    assert {:ok, second} = Mailbox.deliver(alice, envelope(2))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(1))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(2))
+    assert :ok = publish()
 
+    assert [first, second] = ids(alice)
     assert second > first
 
     assert {:ok, %{envelopes: [a, b]}} = Mailbox.fetch(alice)
@@ -71,7 +114,8 @@ defmodule Zifiri.MailboxTest do
   end
 
   test "a mailbox id that does not own the mail gets an empty page, not an error" do
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("alice"), envelope())
+    assert {:ok, :queued} = Mailbox.deliver(mailbox_b64("alice"), envelope())
+    assert :ok = publish()
 
     assert {:ok, %{envelopes: [], cursor: 0, more: false}} =
              Mailbox.fetch(mailbox_b64("mallory"))
@@ -79,10 +123,15 @@ defmodule Zifiri.MailboxTest do
 
   test "the row is addressed by exactly the 16 bytes the client chose" do
     raw = mailbox("alice")
-    assert {:ok, _} = Mailbox.deliver(raw, envelope())
+    assert {:ok, :queued} = Mailbox.deliver(raw, envelope())
+    assert :ok = publish()
 
     assert [%{mailbox_id: stored}] =
-             Repo.all(from e in Envelope, select: map(e, [:mailbox_id]))
+             Repo.all(
+               from e in Envelope,
+                 where: e.mailbox_id == ^raw,
+                 select: map(e, [:mailbox_id])
+             )
 
     assert stored == raw
     assert byte_size(stored) == @id_bytes
@@ -94,7 +143,8 @@ defmodule Zifiri.MailboxTest do
   end
 
   test "the same id addresses the same mailbox and a different id does not" do
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("alice"), envelope(1))
+    assert {:ok, :queued} = Mailbox.deliver(mailbox_b64("alice"), envelope(1))
+    assert :ok = publish()
 
     assert {:ok, %{envelopes: [_]}} = Mailbox.fetch(mailbox_b64("alice"))
     assert {:ok, %{envelopes: []}} = Mailbox.fetch(mailbox_b64("alice2"))
@@ -118,13 +168,14 @@ defmodule Zifiri.MailboxTest do
     end
 
     # And they are one mailbox, not six.
-    assert {:ok, _} = Mailbox.deliver(hd(forms), envelope())
+    assert {:ok, :queued} = Mailbox.deliver(hd(forms), envelope())
+    assert :ok = publish()
 
     for form <- forms do
       assert {:ok, %{envelopes: [_]}} = Mailbox.fetch(form)
     end
 
-    assert rows() == 1
+    assert rows(raw) == 1
   end
 
   test "the wire form round-trips through encode_id" do
@@ -191,6 +242,8 @@ defmodule Zifiri.MailboxTest do
         "lib/zifiri/mailbox.ex",
         "lib/zifiri/mailbox/envelope.ex",
         "lib/zifiri/mailbox/sweeper.ex",
+        "lib/zifiri/mailbox/bucket_handler.ex",
+        "lib/zifiri/mailbox/decoy.ex",
         "priv/repo/migrations/20261122230000_address_mailbox_by_mailbox_id.exs"
       ]
       |> Enum.map(fn path -> {path, code_only(File.read!(Path.join(File.cwd!(), path)))} end)
@@ -228,11 +281,17 @@ defmodule Zifiri.MailboxTest do
   test "the default lifetime is 72 hours" do
     assert Mailbox.ttl_ms() == @ttl_ms
 
+    alice = mailbox_b64("alice")
     start = now()
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("alice"), envelope(), now_ms: start)
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(), now_ms: start)
+    assert :ok = publish(start)
 
     assert [%{created_ms: created, expires_ms: expires}] =
-             Repo.all(from e in Envelope, select: map(e, [:created_ms, :expires_ms]))
+             Repo.all(
+               from e in Envelope,
+                 where: e.mailbox_id == ^raw_id(alice),
+                 select: map(e, [:created_ms, :expires_ms])
+             )
 
     assert created == start
     assert expires - created == @ttl_ms
@@ -242,28 +301,34 @@ defmodule Zifiri.MailboxTest do
     alice = mailbox_b64("alice")
     start = now()
 
-    assert {:ok, _} = Mailbox.deliver(alice, envelope(), now_ms: start)
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(), now_ms: start)
+    assert :ok = publish(start)
 
     assert {:ok, %{envelopes: [_]}} = Mailbox.fetch(alice, 0, now_ms: start + @ttl_ms - 1)
     assert {:ok, %{envelopes: []}} = Mailbox.fetch(alice, 0, now_ms: start + @ttl_ms)
     assert {:ok, %{envelopes: []}} = Mailbox.fetch(alice, 0, now_ms: start + @ttl_ms + 1)
 
-    assert rows() == 1, "expiry hides the row; only the sweeper removes it"
+    assert rows(alice) == 1, "expiry hides the row; only the sweeper removes it"
   end
 
   test "the sweeper deletes expired rows and leaves live ones" do
     start = now()
+    old = mailbox_b64("old")
+    fresh = mailbox_b64("fresh")
 
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("old"), envelope(), now_ms: start)
+    assert {:ok, :queued} = Mailbox.deliver(old, envelope(), now_ms: start)
+    assert :ok = publish(start)
 
-    assert {:ok, _} =
-             Mailbox.deliver(mailbox_b64("fresh"), envelope(),
-               now_ms: start,
-               ttl_ms: 2 * @ttl_ms
-             )
+    assert {:ok, :queued} =
+             Mailbox.deliver(fresh, envelope(), now_ms: start, ttl_ms: 2 * @ttl_ms)
 
-    assert Sweeper.sweep_now(start + @ttl_ms) == 1
-    assert rows() == 1
+    assert :ok = publish(start)
+
+    # Decoys carry the batch's lifetime too, so the sweeper's return value is
+    # the whole bucket; what a mailbox owns is what this test measures.
+    assert Sweeper.sweep_now(start + @ttl_ms) > 0
+    assert rows(old) == 0
+    assert rows(fresh) == 1
 
     assert Sweeper.sweep_now(start + @ttl_ms) == 0
 
@@ -276,7 +341,8 @@ defmodule Zifiri.MailboxTest do
 
   test "the sweeper process runs a pass on demand" do
     start = now()
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("alice"), envelope(), now_ms: start)
+    assert {:ok, :queued} = Mailbox.deliver(mailbox_b64("alice"), envelope(), now_ms: start)
+    assert :ok = publish(start)
 
     {:ok, pid} =
       Sweeper.start_link(
@@ -286,7 +352,7 @@ defmodule Zifiri.MailboxTest do
 
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-    assert Sweeper.sweep_now!(pid, start + @ttl_ms + 1) == 1
+    assert Sweeper.sweep_now!(pid, start + @ttl_ms + 1) > 0
     assert rows() == 0
   end
 
@@ -303,8 +369,9 @@ defmodule Zifiri.MailboxTest do
 
     assert rows() == 0
 
-    assert {:ok, _} = Mailbox.deliver(alice, :binary.copy(<<0>>, 4096))
-    assert rows() == 1
+    assert {:ok, :queued} = Mailbox.deliver(alice, :binary.copy(<<0>>, 4096))
+    assert :ok = publish()
+    assert rows(alice) == 1
   end
 
   test "the table itself refuses an off-size envelope, not only the module" do
@@ -381,11 +448,11 @@ defmodule Zifiri.MailboxTest do
   test "a fetch returns at most 200 envelopes and says there is more" do
     alice = mailbox_b64("alice")
 
-    ids =
-      for i <- 1..205 do
-        {:ok, id} = Mailbox.deliver(alice, envelope(i))
-        id
-      end
+    for i <- 1..205, do: assert({:ok, :queued} = Mailbox.deliver(alice, envelope(i)))
+    assert :ok = publish()
+
+    ids = ids(alice)
+    assert length(ids) == 205
 
     assert {:ok, %{envelopes: page, cursor: cursor, more: true}} = Mailbox.fetch(alice)
     assert length(page) == 200
@@ -400,7 +467,8 @@ defmodule Zifiri.MailboxTest do
   test "a limit above the ceiling is clamped to 200" do
     alice = mailbox_b64("alice")
 
-    for i <- 1..201, do: {:ok, _} = Mailbox.deliver(alice, envelope(i))
+    for i <- 1..201, do: assert({:ok, :queued} = Mailbox.deliver(alice, envelope(i)))
+    assert :ok = publish()
 
     assert {:ok, %{envelopes: page, more: true}} = Mailbox.fetch(alice, 0, limit: 10_000)
     assert length(page) == 200
@@ -409,11 +477,10 @@ defmodule Zifiri.MailboxTest do
   test "the since cursor neither repeats nor skips an envelope" do
     alice = mailbox_b64("alice")
 
-    ids =
-      for i <- 1..7 do
-        {:ok, id} = Mailbox.deliver(alice, envelope(i))
-        id
-      end
+    for i <- 1..7, do: assert({:ok, :queued} = Mailbox.deliver(alice, envelope(i)))
+    assert :ok = publish()
+
+    ids = ids(alice)
 
     assert drain(alice, 0, 2) == ids
     assert drain(alice, 0, 2) == Enum.uniq(drain(alice, 0, 2))
@@ -421,22 +488,30 @@ defmodule Zifiri.MailboxTest do
 
   test "the cursor returns nothing when there is nothing new" do
     alice = mailbox_b64("alice")
-    assert {:ok, id} = Mailbox.deliver(alice, envelope())
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope())
+    assert :ok = publish()
 
+    assert [id] = ids(alice)
     assert {:ok, %{envelopes: [], cursor: ^id, more: false}} = Mailbox.fetch(alice, id)
   end
 
   test "an id is never reused, so an ack cannot hide the next delivery" do
     alice = mailbox_b64("alice")
 
-    assert {:ok, first} = Mailbox.deliver(alice, envelope(1))
-    assert {:ok, second} = Mailbox.deliver(alice, envelope(2))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(1))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(2))
+    assert :ok = publish()
+
+    assert [first, second] = ids(alice)
 
     # Ack the newest row: with a plain SQLite rowid the next insert would take
     # `second` again and a client holding that cursor would never see it.
     assert {:ok, 1} = Mailbox.ack(alice, [second])
 
-    assert {:ok, third} = Mailbox.deliver(alice, envelope(3))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(3))
+    assert :ok = publish()
+
+    assert [^first, third] = ids(alice)
     assert third > second
 
     assert {:ok, %{envelopes: [row], cursor: ^third}} = Mailbox.fetch(alice, first)
@@ -447,38 +522,46 @@ defmodule Zifiri.MailboxTest do
 
   test "ack deletes what the caller read" do
     alice = mailbox_b64("alice")
-    assert {:ok, one} = Mailbox.deliver(alice, envelope(1))
-    assert {:ok, two} = Mailbox.deliver(alice, envelope(2))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(1))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(2))
+    assert :ok = publish()
+
+    assert [one, two] = ids(alice)
 
     assert {:ok, 1} = Mailbox.ack(alice, [one])
-    assert rows() == 1
+    assert rows(alice) == 1
 
     assert {:ok, %{envelopes: [%{id: ^two}]}} = Mailbox.fetch(alice)
 
     assert {:ok, 1} = Mailbox.ack(alice, two)
-    assert rows() == 0
+    assert rows(alice) == 0
   end
 
   test "ack does not delete another mailbox's envelopes" do
     alice = mailbox_b64("alice")
     bob = mailbox_b64("bob")
 
-    assert {:ok, alice_id} = Mailbox.deliver(alice, envelope(1))
-    assert {:ok, bob_id} = Mailbox.deliver(bob, envelope(2))
+    assert {:ok, :queued} = Mailbox.deliver(alice, envelope(1))
+    assert {:ok, :queued} = Mailbox.deliver(bob, envelope(2))
+    assert :ok = publish()
+
+    assert [alice_id] = ids(alice)
+    assert [bob_id] = ids(bob)
 
     assert {:ok, 0} = Mailbox.ack(alice, [bob_id])
-    assert rows() == 2
+    assert rows(bob) == 1
 
     assert {:ok, %{envelopes: [%{id: ^bob_id}]}} = Mailbox.fetch(bob)
     assert {:ok, 1} = Mailbox.ack(alice, [alice_id])
-    assert rows() == 1
+    assert rows(alice) == 0
   end
 
   test "ack with an empty list deletes nothing" do
-    assert {:ok, _} = Mailbox.deliver(mailbox_b64("alice"), envelope())
+    assert {:ok, :queued} = Mailbox.deliver(mailbox_b64("alice"), envelope())
+    assert :ok = publish()
 
     assert {:ok, 0} = Mailbox.ack(mailbox_b64("alice"), [])
-    assert rows() == 1
+    assert rows(mailbox_b64("alice")) == 1
   end
 
   # -- bad input --------------------------------------------------------------

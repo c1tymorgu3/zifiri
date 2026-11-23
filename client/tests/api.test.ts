@@ -270,7 +270,19 @@ describe("rooms", () => {
       sig: toB64Url(sig),
       ctr: 7,
       nonce: 11,
+      mode: "fast",
     });
+  });
+
+  it("sends the silent mode as the wire value the server knows", async () => {
+    reply({ status: "queued" }, 202);
+    const body = new TextEncoder().encode("hello");
+    const pubkey = new Uint8Array(32).fill(1);
+    const sig = new Uint8Array(64).fill(2);
+
+    await postRoomMessage("lobby", { body, pubkey, sig, ctr: 7, nonce: 11, mode: "secret" });
+
+    expect(JSON.parse(String(call().init.body)).mode).toBe("secret");
   });
 
   it("encodes a room name rather than letting it shape the path", async () => {

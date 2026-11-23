@@ -64,6 +64,7 @@ defmodule Zifiri.Mailbox do
 
   import Ecto.Query
 
+  alias Zifiri.Bucket
   alias Zifiri.Mailbox.Envelope
   alias Zifiri.Repo
 
@@ -91,25 +92,32 @@ defmodule Zifiri.Mailbox do
   @type mailbox_id :: <<_::128>>
 
   @doc """
-  Stores one envelope for `mailbox_id`.
+  Queues one envelope for `mailbox_id`.
 
   `mailbox_id` is the recipient's 16 random bytes. The wire forms are accepted
-  too — 32 hex characters, or base64 (padded or not, standard or URL-safe) —
-  so an HTTP layer can pass a URL segment straight through without its own
+  too — 32 hex characters, or base64 (padded or not, standard or URL-safe) — so
+  an HTTP layer can pass a URL segment straight through without its own
   decoding rules. `envelope` must be exactly 4096 bytes; anything else is
-  refused before it reaches the database, and the table's trigger refuses it
-  again if it does.
+  refused before it reaches the queue, and the table's trigger refuses it again
+  if a handler ever writes an off-size blob.
+
+  Delivery does **not** write the row. The envelope goes into
+  `Zifiri.Bucket` as `{:mailbox, tag, envelope, ttl}` and
+  `Zifiri.Bucket.Publisher` writes it when the bucket closes, completing the
+  batch to `Zifiri.Bucket.target/0` with decoys. There is no direct write path:
+  a row that was written without a bucket would be a row with an arrival clock
+  of its own. The caller therefore gets `{:ok, :queued}`, not a row id; the
+  cursor id is assigned at publish time and is only visible through `fetch/3`.
 
   Options:
 
     * `:ttl_ms` — lifetime, default 72 h;
     * `:now_ms` — clock override, for tests.
 
-  Returns `{:ok, id}`. The id is a monotonic cursor value, not an address: it
-  is only useful to a caller who already holds the mailbox id.
+  Returns `{:ok, :queued}`.
   """
   @spec deliver(binary(), binary(), keyword()) ::
-          {:ok, pos_integer()}
+          {:ok, :queued}
           | {:error, :bad_mailbox_id | :bad_envelope | :bad_ttl}
   def deliver(mailbox_id, envelope, opts \\ []) do
     with {:ok, id} <- decode_id(mailbox_id),
@@ -117,18 +125,8 @@ defmodule Zifiri.Mailbox do
          {:ok, ttl} <- check_ttl(Keyword.get(opts, :ttl_ms, @ttl_ms)) do
       now = Keyword.get(opts, :now_ms, now_ms())
 
-      # `Repo.insert/1` on a struct, not `insert_all/3`: the adapter reports
-      # `last_insert_rowid()` back on the struct, which is the monotonic id the
-      # cursor needs, without relying on SQLite's RETURNING support.
-      %Envelope{
-        mailbox_id: id,
-        envelope: envelope,
-        created_ms: now,
-        expires_ms: now + ttl
-      }
-      |> Repo.insert!()
-      |> Map.fetch!(:id)
-      |> then(&{:ok, &1})
+      :ok = Bucket.add({:mailbox, id, envelope, ttl}, now)
+      {:ok, :queued}
     end
   end
 

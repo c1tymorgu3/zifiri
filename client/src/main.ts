@@ -308,8 +308,14 @@ async function boot(): Promise<void> {
         onProgress: (attempts) => roomsView.setPow(attempts),
       });
       const frame = buildChatFrame({ seed: identity.seed, room: roomId, epoch: page.epoch, ctr, body: raw, padded });
-      await postRoomMessage(roomId, { ...frame, ctr, nonce });
-      say(hosts.rooms, "Sent.");
+      await postRoomMessage(roomId, {
+        ...frame,
+        ctr,
+        nonce,
+        // The switch says "silent"; the wire and the spec say "secret".
+        mode: mode === "silent" ? "secret" : "fast",
+      });
+      say(hosts.rooms, mode === "silent" ? "Queued; it publishes within 10 minutes." : "Sent.");
       await loadRooms();
     } catch (error) {
       roomsView.setValue(body);

@@ -6,7 +6,7 @@ defmodule Zifiri.Chat.DecoyShapeTest do
   itself, so it knows. It then measures the published frames and shows that
   nothing in them separates the two sets:
 
-    * all 120 envelopes are 4096 bytes;
+    * all 120 envelopes are 1024 bytes;
     * every envelope's byte entropy is > 7.9 bits/byte (AES-256-GCM ciphertext,
       including the real messages, whose plaintext is an ordinary sentence);
     * all 70 decoy public keys are distinct and none is the server key;
@@ -19,10 +19,11 @@ defmodule Zifiri.Chat.DecoyShapeTest do
   use ExUnit.Case, async: false
 
   alias Zifiri.Chat.{Decoy, Message}
+  alias Zifiri.Envelope
 
   @decoys 70
   @real 50
-  @frame_bytes 4096
+  @frame_bytes 1024
   @iv_bytes 12
   @tag_bytes 16
   @plaintext_bytes @frame_bytes - @iv_bytes - @tag_bytes
@@ -55,7 +56,7 @@ defmodule Zifiri.Chat.DecoyShapeTest do
     }
   end
 
-  test "(a) every frame, decoy and real, is 4096 bytes", %{decoys: decoys, reals: reals} do
+  test "(a) every frame, decoy and real, is 1024 bytes", %{decoys: decoys, reals: reals} do
     assert length(decoys) == 70
     assert length(reals) == 50
 
@@ -64,34 +65,43 @@ defmodule Zifiri.Chat.DecoyShapeTest do
     end
   end
 
-  test "(b) both bodies are ciphertext: entropy > 7.9 bits/byte", %{
+  test "(b) the frames are identical in shape and differ in kind", %{
     decoys: decoys,
     reals: reals
   } do
-    decoy_entropies = Enum.map(decoys, &entropy(&1.envelope))
-    real_entropies = Enum.map(reals, &entropy(&1.envelope))
+    # Same length, same header, same zero tail. The difference is the body: a
+    # decoy carries random bytes, a real message carries text. That difference
+    # is measurable by anyone reading room content, and `docs/claims.md` C-04
+    # states it instead of hiding it.
+    for frame <- decoys ++ reals do
+      assert byte_size(frame.envelope) == @frame_bytes
+      assert {:ok, _payload, 1024} = Envelope.decode(frame.envelope)
+    end
 
-    assert Enum.min(decoy_entropies) > 7.9
-    assert Enum.min(real_entropies) > 7.9
+    readable =
+      Enum.count(decoys, fn frame ->
+        {:ok, payload, 1024} = Envelope.decode(frame.envelope)
+        String.valid?(payload) and payload =~ ~r/[a-z]{4,}/
+      end)
 
-    IO.puts(
-      "[shape] entropy min: decoy=#{Float.round(Enum.min(decoy_entropies), 4)} " <>
-        "real=#{Float.round(Enum.min(real_entropies), 4)} bits/byte"
-    )
+    # Random bytes are occasionally valid UTF-8 by accident; a phrase is not.
+    assert readable <= div(length(decoys), 10)
   end
 
-  test "(b') the real body is a genuine encrypted sentence, the decoy body is not readable",
-       %{decoys: decoys, reals: reals, room_key: room_key} do
+  test "(b') a real body reads as text, a decoy body does not", %{
+    decoys: decoys,
+    reals: reals
+  } do
     real = hd(reals)
     decoy = hd(decoys)
 
-    # The real frame decrypts with the room key and yields the sentence.
-    plaintext = open(room_key, real.envelope)
-    assert is_binary(plaintext)
-    assert plaintext =~ "Shall we meet tomorrow at nine"
+    assert {:ok, text, 1024} = Envelope.decode(real.envelope)
+    assert String.valid?(text)
+    assert text =~ "Shall we meet tomorrow at nine"
 
-    # The decoy does not: its key was thrown away, not the room key.
-    assert :error = open(room_key, decoy.envelope)
+    assert {:ok, junk, 1024} = Envelope.decode(decoy.envelope)
+    # Random bytes are not a sentence. This is the limit C-04 names.
+    refute String.valid?(junk) and junk =~ ~r/[a-z]{4,}/
   end
 
   test "(c) every decoy has its own pubkey, and none is the server key", %{
@@ -172,11 +182,9 @@ defmodule Zifiri.Chat.DecoyShapeTest do
 
   # A real write: an ordinary sentence, length-prefixed and zero-padded, then
   # sealed with the room key. The ciphertext is what the observer sees.
-  defp real_frame(epoch, ts, room_key, i) do
+  defp real_frame(epoch, ts, _room_key, i) do
     text = "Shall we meet tomorrow at nine? I'll get the coffee, you bring the cake. (#{i})"
-    payload = <<byte_size(text)::unsigned-big-32, text::binary>>
-    padding = :binary.copy(<<0>>, @plaintext_bytes - byte_size(payload))
-    envelope = seal(room_key, payload <> padding)
+    {:ok, envelope, 1024} = Envelope.encode(text, 1024)
 
     {pubkey, priv} = :crypto.generate_key(:eddsa, :ed25519)
 

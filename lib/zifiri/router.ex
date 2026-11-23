@@ -76,7 +76,7 @@ defmodule Zifiri.Router do
 
   @refused ~s({"error":"refused"})
   @not_found ~s({"error":"not_found"})
-  @accepted ~s({"status":"accepted"})
+  @queued ~s({"status":"queued"})
   @updated ~s({"status":"updated"})
   @deleted ~s({"status":"deleted"})
   @acked ~s({"status":"acked"})
@@ -243,7 +243,7 @@ defmodule Zifiri.Router do
     params = body(conn)
 
     case Mailbox.deliver(tag, decode64(params["envelope"])) do
-      {:ok, _id} -> reply(conn, 202, @accepted)
+      {:ok, :queued} -> reply(conn, 202, @queued)
       {:error, _reason} -> reply(conn, 400, @refused)
     end
   end
@@ -264,7 +264,7 @@ defmodule Zifiri.Router do
       since = integer(query(conn)["since"]) || 0
 
       messages =
-        Store.recent(room, 50)
+        Store.recent(room, 120)
         |> Enum.filter(&(&1.id > since))
         |> Enum.reverse()
 
@@ -296,31 +296,55 @@ defmodule Zifiri.Router do
          true <- Message.verify(pubkey, sig, signing_input) do
       message = %{pubkey: pubkey, sig: sig, ctr: ctr, padded: padded, bucket: byte_size(padded)}
 
-      case Store.submit(room, message) do
-        {:ok, stored} ->
-          reply(
-            conn,
-            202,
-            JSON.encode(%{
-              "status" => "accepted",
-              "ref" => stored.id,
-              "epoch" => Message.encode64(epoch)
-            })
-          )
+      # Both modes are reachable over HTTP, because HTTP is the path the browser
+      # actually uses. `fast` writes now; `secret` queues the verified frame and
+      # lets the bucket publish it with decoys.
+      case room_mode(params["mode"]) do
+        :secret ->
+          Zifiri.Bucket.add({:chat, room, message})
+          reply(conn, 202, @queued)
 
-        {:error, :rate_limited} ->
-          reply(conn, 429, @refused)
+        :fast ->
+          submit_room(conn, room, epoch, message)
 
-        {:error, :replay} ->
-          reply(conn, 409, @refused)
-
-        {:error, :too_large} ->
-          reply(conn, 400, @refused)
+        :bad_mode ->
+          reply(conn, 400, JSON.encode(%{"error" => "bad_mode"}))
       end
     else
       {:error, :too_large} -> reply(conn, 400, @refused)
       false -> reply(conn, 403, @refused)
       _ -> reply(conn, 400, @refused)
+    end
+  end
+
+  defp room_mode(nil), do: :fast
+  defp room_mode("fast"), do: :fast
+  defp room_mode("secret"), do: :secret
+  # The interface calls it "silent"; the wire and the spec call it "secret".
+  defp room_mode("silent"), do: :secret
+  defp room_mode(_other), do: :bad_mode
+
+  defp submit_room(conn, room, epoch, message) do
+    case Store.submit(room, message) do
+      {:ok, stored} ->
+        reply(
+          conn,
+          202,
+          JSON.encode(%{
+            "status" => "accepted",
+            "ref" => stored.id,
+            "epoch" => Message.encode64(epoch)
+          })
+        )
+
+      {:error, :rate_limited} ->
+        reply(conn, 429, @refused)
+
+      {:error, :replay} ->
+        reply(conn, 409, @refused)
+
+      {:error, :too_large} ->
+        reply(conn, 400, @refused)
     end
   end
 
@@ -466,20 +490,39 @@ defmodule Zifiri.Router do
   end
 
   defp room_page(messages, epoch, last_ctr) do
-    {chunks, _size} =
-      Enum.reduce_while(messages, {[], 0}, fn message, {acc, size} ->
+    # Two things compete for one fixed 16 KiB answer: the messages and the
+    # `last_ctr` map. Since decoys each carry their own key, that map grows with
+    # the bucket (120 entries at close time) and can eat the whole budget, which
+    # turns a page into a 429. Messages get two thirds; the counters take what
+    # is left and stop there. A client that needs the rest asks with `since`.
+    message_budget = div(@page_budget * 2, 3)
+
+    {chunks, size} =
+      Enum.reduce_while(messages, {[], 0}, fn message, {acc, used} ->
         chunk = JSON.encode(Message.to_json(message))
 
-        if size + byte_size(chunk) + 1 > @page_budget do
-          {:halt, {acc, size}}
+        if used + byte_size(chunk) + 1 > message_budget do
+          {:halt, {acc, used}}
         else
-          {:cont, {[chunk | acc], size + byte_size(chunk) + 1}}
+          {:cont, {[chunk | acc], used + byte_size(chunk) + 1}}
+        end
+      end)
+
+    {ctr_parts, _} =
+      Enum.reduce_while(last_ctr, {[], size}, fn {key, ctr}, {acc, used} ->
+        part = JSON.encode(key) <> ":" <> Integer.to_string(ctr)
+
+        if used + byte_size(part) + 1 > @page_budget do
+          {:halt, {acc, used}}
+        else
+          {:cont, {[part | acc], used + byte_size(part) + 1}}
         end
       end)
 
     inner = chunks |> Enum.reverse() |> Enum.join(",")
+    counters = ctr_parts |> Enum.reverse() |> Enum.join(",")
 
-    ~s({"epoch":#{JSON.encode(epoch)},"last_ctr":#{JSON.encode(last_ctr)},"messages":[#{inner}]})
+    ~s({"epoch":#{JSON.encode(epoch)},"last_ctr":{#{counters}},"messages":[#{inner}]})
   end
 
   defp listing_json(%Listing{} = listing) do

@@ -43,7 +43,7 @@ defmodule Zifiri.ChatTest do
   end
 
   # A nonce that provably does not solve the work for this payload: the first
-  # one that fails, rather than a guess that fails 4095 times in 4096.
+  # one that fails, rather than a guess that fails 4095 times in 1024.
   defp bad_nonce(input) do
     Enum.find(0..1_000, fn nonce -> not Pow.verify(Message.pow_hash(input), nonce, @pow_bits) end)
   end
@@ -230,12 +230,12 @@ defmodule Zifiri.ChatTest do
     assert_receive %Phoenix.Socket.Broadcast{
       topic: @room,
       event: "msg",
-      payload: %{"id" => 1, "ctr" => 1, "pubkey" => pubkey, "bucket" => 256} = message
+      payload: %{"id" => 1, "ctr" => 1, "pubkey" => pubkey, "bucket" => 1024} = message
     }
 
     assert pubkey == Message.encode64(pub)
     assert {:ok, padded} = Message.decode64(message["body"])
-    assert byte_size(padded) == 256
+    assert byte_size(padded) == 1024
     assert {:ok, "merhaba"} = Body.unpad(padded)
   end
 
@@ -416,7 +416,7 @@ defmodule Zifiri.ChatTest do
     assert {:error, :too_large} =
              Store.submit(@room, stored(key, 1, :binary.copy("x", 16_384), 16_384))
 
-    assert {:ok, _} = Store.submit(@room, stored(key, 2, :binary.copy("x", 4096), 4096))
+    assert {:ok, _} = Store.submit(@room, stored(key, 2, :binary.copy("x", 1024), 1024))
 
     assert {:error, :too_large} =
              Store.submit(@room, stored(key, 3, :binary.copy("x", 4097), 4097))

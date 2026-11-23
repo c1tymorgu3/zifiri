@@ -4,12 +4,25 @@ defmodule Zifiri.Chat.RoomChannel do
 
   Client pushes `"msg"` with
 
-      %{"body" => raw, "pubkey" => pk_b64, "sig" => sig_b64, "ctr" => n, "nonce" => n}
+      %{"body" => raw, "pubkey" => pk_b64, "sig" => sig_b64, "ctr" => n,
+        "nonce" => n, "mode" => "fast" | "secret"}
+
+  `"mode"` is optional and defaults to `"fast"`. The two modes differ only in
+  where a verified message is written:
+
+    * **fast** — `Zifiri.Chat.Store.submit/2` immediately and `broadcast!` to
+      the room, exactly as before. Latency is the socket round trip.
+    * **secret** — the same verified, padded frame is queued in
+      `Zifiri.Bucket` as `{:chat, "chat:lobby", message}`. Nothing is visible
+      until the ten-minute bucket closes, when `Zifiri.Chat.BucketHandler`
+      completes the batch to 120 with decoys, shuffles it and submits it. The
+      reply is `%{status: "queued", mode: "secret"}`; latency is up to one
+      bucket.
 
   The server pads the body to a fixed bucket, checks the proof of work over
   `Zifiri.Chat.Message.pow_hash/1` (12 bits, §7.4), verifies the Ed25519
-  signature over `Zifiri.Chat.Message.signing_input/4`, and only then hands the
-  message to the store. Nothing is written to disk at any point (`plan §7.1`).
+  signature over `Zifiri.Chat.Message.signing_input/4`, and only then takes the
+  fast or the secret path. Nothing is written to disk at any point (`plan §7.1`).
 
   The proof of work comes before the signature on purpose: a signature costs a
   curve verification, a hash costs a hash, so garbage is refused at the cheap
@@ -38,6 +51,7 @@ defmodule Zifiri.Chat.RoomChannel do
 
   use Phoenix.Channel
 
+  alias Zifiri.Bucket
   alias Zifiri.Chat.{Body, Message, Store}
   alias Zifiri.Pow
 
@@ -70,15 +84,13 @@ defmodule Zifiri.Chat.RoomChannel do
 
   @impl true
   def handle_in("msg", payload, socket) when is_map(payload) do
-    case parse(payload) do
-      {:error, reason} ->
-        reject(socket, reason)
-
-      {:ok, incoming} ->
-        case Body.pad(incoming.body) do
-          {:error, :too_large} -> reject(socket, "too_large")
-          {:ok, padded} -> authenticate(socket, incoming, padded)
-        end
+    with {:ok, mode} <- mode(payload),
+         {:ok, incoming} <- parse(payload),
+         {:ok, padded} <- Body.pad(incoming.body) do
+      authenticate(socket, incoming, padded, mode)
+    else
+      {:error, :too_large} -> reject(socket, "too_large")
+      {:error, reason} -> reject(socket, reason)
     end
   end
 
@@ -86,7 +98,7 @@ defmodule Zifiri.Chat.RoomChannel do
 
   def handle_in(_event, _payload, socket), do: reject(socket, "unknown_event")
 
-  defp authenticate(socket, incoming, padded) do
+  defp authenticate(socket, incoming, padded, mode) do
     epoch = Store.epoch(@room)
     signing_input = Message.signing_input(@room, epoch, incoming.ctr, padded)
 
@@ -98,11 +110,12 @@ defmodule Zifiri.Chat.RoomChannel do
         reject(socket, "bad_signature")
 
       true ->
-        append(socket, incoming, padded)
+        append(socket, incoming, padded, mode)
     end
   end
 
-  defp append(socket, incoming, padded) do
+  # Fast: the frame is in the buffer when this returns, and the room is told.
+  defp append(socket, incoming, padded, :fast) do
     message = %{
       pubkey: incoming.pubkey,
       sig: incoming.sig,
@@ -124,6 +137,34 @@ defmodule Zifiri.Chat.RoomChannel do
 
       {:error, :too_large} ->
         reject(socket, "too_large")
+    end
+  end
+
+  # Secret: the same verified frame survives untouched as a bucket entry. The
+  # store is not written and the room is not told; that happens at the bucket's
+  # close, mixed with 120 - n decoys (`Zifiri.Chat.BucketHandler`).
+  defp append(socket, incoming, padded, :secret) do
+    message = %{
+      pubkey: incoming.pubkey,
+      sig: incoming.sig,
+      ctr: incoming.ctr,
+      padded: padded,
+      bucket: byte_size(padded)
+    }
+
+    :ok = Bucket.add({:chat, @room, message})
+
+    {:reply, %{status: "queued", mode: "secret"}, socket}
+  end
+
+  # Absent means the default, which is fast (`docs/spec.md` §"Two modes"). An
+  # unknown or non-string value is refused before any cryptographic work, and
+  # the reason never echoes the payload.
+  defp mode(payload) do
+    case Map.get(payload, "mode", "fast") do
+      "fast" -> {:ok, :fast}
+      "secret" -> {:ok, :secret}
+      _other -> {:error, "bad_mode"}
     end
   end
 

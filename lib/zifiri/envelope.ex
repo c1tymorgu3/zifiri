@@ -69,6 +69,24 @@ defmodule Zifiri.Envelope do
   end
 
   @doc """
+  Pads into one named bucket instead of the smallest that fits.
+
+  Chat uses this: a room frame is always 1024 bytes, because a frame whose size
+  follows its text tells the reader how long the text was, and because a decoy
+  can only be mistaken for a real frame if both are the same size.
+  """
+  @spec encode(binary(), pos_integer()) :: {:ok, binary(), pos_integer()} | {:error, :too_large}
+  def encode(payload, bucket) when is_binary(payload) and bucket in @buckets do
+    size = byte_size(payload)
+
+    if size <= bucket - @header_bytes do
+      {:ok, pad(payload, size, bucket), bucket}
+    else
+      {:error, :too_large}
+    end
+  end
+
+  @doc """
   Reads one envelope back.
 
   Rejects a size that is not exactly a bucket (`:bad_bucket`), a length prefix

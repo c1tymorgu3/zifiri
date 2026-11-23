@@ -24,9 +24,9 @@ defmodule Zifiri.Chat.Body do
 
   alias Zifiri.Envelope
 
-  @buckets [256, 1024]
+  @buckets [1024]
 
-  @type bucket :: 256 | 1024
+  @type bucket :: 1024
 
   @doc "Pads a raw body into the smallest chat bucket that holds it."
   @spec pad(binary()) :: {:ok, binary()} | {:error, :too_large}
@@ -63,7 +63,10 @@ defmodule Zifiri.Chat.Body do
   def buckets, do: @buckets
 
   defp encode(body) do
-    case Envelope.encode(body) do
+    # One bucket, on purpose: a room frame is always the same size, so neither
+    # the length of the text nor the difference between a decoy and a real frame
+    # is visible on the wire.
+    case Envelope.encode(body, 1024) do
       {:ok, padded, bucket} when bucket in @buckets -> {:ok, padded}
       {:ok, _padded, _bucket} -> {:error, :too_large}
       {:error, :too_large} -> {:error, :too_large}

@@ -40,7 +40,10 @@ the model ends:
   is an **upper bound** (A3 can inflate it with fake clients): the text says
   "at most k", not "k people".
 - **On the message plane (72 h TTL, mailbox written to disk) no claim against
-  A1 is written.** Cover stays on the room/bucket plane (memory, 15 min).
+  A1 is written.** Cover still shapes the write: 1:1 envelopes collect in the
+  same ten-minute bucket and are completed to 120 with decoys before anything
+  is stored. What differs is durability — the bucket is RAM, the completed
+  batch is on disk for 72 h.
 
 Rules for cover to work (in force once cover is live):
 
@@ -74,6 +77,35 @@ Note: this number answers "which message is yours" **for A2/A3**. The question
 "who are you" already has no answer — no account, no IP, no session. The two
 questions are separate; on the second the ratio is 100%. For A1 this table does
 not hold (see above).
+
+**Where a room write goes.** The two modes are two write paths into the same
+store, and the channel is where they split (`lib/zifiri/chat/room_channel.ex`,
+`handle_in("msg", …)` with a `"mode"` field):
+
+- `"fast"` (the default when `"mode"` is absent): the verified, padded frame is
+  submitted to `Zifiri.Chat.Store.submit/2` before `handle_in/3` returns and is
+  broadcast to the room. Latency is the socket round trip, < 1 s; the write is
+  in the ring buffer immediately.
+- `"secret"`: the same verified frame is queued with
+  `Zifiri.Bucket.add({:chat, "chat:lobby", message})` and the client gets
+  `%{status: "queued", mode: "secret"}`. The store is **not** written and the
+  room is **not** broadcast to. At the bucket's close
+  `Zifiri.Chat.BucketHandler` pads the batch to 120 with `Zifiri.Chat.Decoy`
+  frames, shuffles it and calls the same `Store.submit/2` once per frame.
+  Latency is 0–10 minutes (5 on average) plus the tick, and the frame sits in
+  RAM in the meantime — the bucket is not on disk.
+
+The shuffle permutes senders, not a sender's own stream: a lower counter from a
+known key is read as a replay, so one member's frames stay in counter order
+inside the batch. Several senders' frames — and the 117 decoys — interleave
+arbitrarily, which is the order an observer sees either way.
+
+**Limit of this slice.** A chat frame is 256 or 1024 B (`Zifiri.Chat.Body`),
+while a decoy is a 4096 B sealed envelope. In the mailbox plane every frame is
+4096 B, so C-04 holds there; in the chat store the body length — and the fact
+that a decoy does not parse as a chat frame — still separates a real write from
+a decoy. Minting chat-sized decoys (256/1024 B, valid `Body` frames) is what
+closes that hole, and this slice does not do it.
 
 ## Two modes — fast is the default
 

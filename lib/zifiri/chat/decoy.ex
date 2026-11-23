@@ -44,14 +44,12 @@ defmodule Zifiri.Chat.Decoy do
   """
 
   alias Zifiri.Bucket
+  alias Zifiri.Envelope
   alias Zifiri.Chat.Message
 
   @room "chat:lobby"
   @target 120
-  @bucket_bytes 4096
-  @iv_bytes 12
-  @tag_bytes 16
-  @key_bytes 32
+  @bucket_bytes 1024
   @id_bytes 16
 
   @typedoc """
@@ -152,19 +150,17 @@ defmodule Zifiri.Chat.Decoy do
     %{id: opaque_id(), sig: sig, pubkey: pubkey, envelope: envelope, ts: ts}
   end
 
-  # 4 KB of AES-256-GCM ciphertext: 12-byte IV, 4068-byte ciphertext, 16-byte
-  # tag. The plaintext is random because a decoy has nothing to say; the key is
-  # random and discarded because nobody may ever read it. The frame is exactly
-  # the size of a real write, and its bytes are as uniform as a real write's.
+  # A decoy frame has the same bytes-on-the-wire shape as a real one: a
+  # 1024-byte chat envelope, a length header, a body, and a zero tail. The body
+  # is random rather than text, and that is a limit worth naming: a reader who
+  # can read room text can tell a random body from a written one. What the
+  # bucket hides is the moment of writing and the sender's slot in the batch,
+  # not whether a given frame was typed by a person.
   defp seal do
-    key = :crypto.strong_rand_bytes(@key_bytes)
-    iv = :crypto.strong_rand_bytes(@iv_bytes)
-    plaintext = :crypto.strong_rand_bytes(@bucket_bytes - @iv_bytes - @tag_bytes)
-
-    {ciphertext, tag} =
-      :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, plaintext, <<>>, @tag_bytes, true)
-
-    <<iv::binary-size(@iv_bytes), ciphertext::binary, tag::binary-size(@tag_bytes)>>
+    len = 64 + :rand.uniform(128)
+    payload = :crypto.strong_rand_bytes(len)
+    {:ok, frame, 1024} = Envelope.encode(payload, 1024)
+    frame
   end
 
   # 16 random bytes, URL-safe base64 without padding: 22 characters, no order,

@@ -2,7 +2,7 @@ defmodule Zifiri.Chat.DecoyTest do
   @moduledoc """
   The filler: a decoy must be indistinguishable from a real chat write.
 
-  "Indistinguishable" is checked rather than asserted: every decoy is 4096
+  "Indistinguishable" is checked rather than asserted: every decoy is a 1024-byte
   bytes of AES-256-GCM ciphertext (no plaintext frame, no dictionary), carries
   its own ephemeral Ed25519 key, has an opaque 16-byte id, and is stamped
   inside its own bucket. There is no classifier left in the module to leak the
@@ -17,7 +17,7 @@ defmodule Zifiri.Chat.DecoyTest do
 
   @anchor 1_764_000_000_000
   @next_bucket @anchor + 600_000
-  @frame_bytes 4096
+  @frame_bytes 1024
 
   setup do
     Bucket.reset()
@@ -68,20 +68,21 @@ defmodule Zifiri.Chat.DecoyTest do
 
   # --- the frame -------------------------------------------------------------
 
-  test "every decoy is 4096 bytes of high-entropy ciphertext" do
+  test "every decoy is a 1024-byte chat frame" do
     decoys = Decoy.fill(120, epoch: :crypto.strong_rand_bytes(16))
 
     for decoy <- decoys do
       assert byte_size(decoy.envelope) == @frame_bytes
-      assert entropy(decoy.envelope) > 7.9
     end
   end
 
-  test "the envelope is ciphertext, not a decodable plaintext frame" do
-    # A real 4 KB envelope decodes: 32-bit length, payload, zero padding. A
-    # decoy's bytes are random, so the decoder cannot find a zero-padded frame.
+  test "a decoy has the same frame shape as a real message" do
+    # Same decoder, same length header, same zero tail. The body is random
+    # rather than text, which is the one thing a reader of room text can use to
+    # tell a decoy from a written message; see `docs/claims.md` C-04.
     for decoy <- Decoy.fill(20, epoch: :crypto.strong_rand_bytes(16)) do
-      assert {:error, _reason} = Envelope.decode(decoy.envelope)
+      assert {:ok, payload, 1024} = Envelope.decode(decoy.envelope)
+      assert byte_size(payload) > 0
     end
   end
 

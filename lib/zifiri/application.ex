@@ -27,6 +27,11 @@ defmodule Zifiri.Application do
       # the table has to exist before the first write is accepted. RAM only —
       # a buffered write that does not survive a restart is the point.
       Zifiri.Bucket,
+      # The bucket's only writer. Order matters: the table exists before the
+      # publisher's first tick. One publisher serves every plane — a drained
+      # item carries its type and the handler table picks the writer, so a new
+      # plane adds a handler, not a process.
+      Zifiri.Bucket.Publisher,
       # RAM-only planes. Chat's buffer must exist before the endpoint accepts a
       # socket, and the decoy writer fills the same rooms so a real message is
       # not the only thing in a bucket. The mailbox sweeper is what makes the
