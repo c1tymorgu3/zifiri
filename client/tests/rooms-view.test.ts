@@ -379,7 +379,10 @@ describe("composer", () => {
     expect(DEFAULT_MODE).toBe("silent");
     expect(h.view.mode()).toBe("silent");
     expect(one(h.mount, "zf-consequence").textContent).toBe(describeMode("silent"));
-    expect(one(h.mount, "zf-consequence").textContent).toContain(SILENT_WAIT);
+    // The wait belongs to the queue line; the sentence states the privacy only,
+    // so the two lines under the composer never say the same thing twice.
+    expect(one(h.mount, "zf-consequence").textContent).not.toContain(SILENT_WAIT);
+    expect(one(h.mount, "zf-pending").textContent).toContain(SILENT_WAIT);
     expect(radio(h.mount, "silent").checked).toBe(true);
     expect(radio(h.mount, "fast").checked).toBe(false);
   });

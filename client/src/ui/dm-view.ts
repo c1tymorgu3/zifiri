@@ -368,7 +368,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
   head.className = "dm-head";
 
   const title = doc.createElement("h2");
-  title.textContent = "Mesajlar";
+  title.textContent = "Konuşmalar";
 
   const toggleLabel = doc.createElement("label");
   toggleLabel.className = "dm-toggle";
@@ -609,7 +609,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
 
     const input = doc.createElement("textarea");
     input.className = "dm-input";
-    input.rows = 3;
+    input.rows = 2;
     input.value = actions.draftText();
     input.setAttribute("maxlength", String(MAX_BODY));
     input.setAttribute("spellcheck", "false");
@@ -627,7 +627,7 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     send.className = "dm-send";
     send.textContent = "Mesaj gönder";
 
-    row.append(counter, send);
+    row.append(modes, counter, send);
 
     const line = doc.createElement("p");
     line.className = "dm-status";
@@ -635,7 +635,11 @@ function buildDom(mount: HTMLElement, actions: DmDomActions): DmDom {
     line.setAttribute("aria-live", "polite");
     status = line;
 
-    form.append(modes, modeNote, modeAsk, fieldLabel, row, line);
+    // The field first, then one control row: mode, count, send. A visitor
+    // arrives to write, not to choose a delivery mode, so the switch never sits
+    // above the caret; and keeping it on the send row saves 71px that the
+    // conversation gets instead — the composer was taller than the thread.
+    form.append(fieldLabel, row, modeNote, modeAsk, line);
 
     input.addEventListener("input", () => actions.setDraft(input.value));
     form.addEventListener("submit", (event: Event) => {

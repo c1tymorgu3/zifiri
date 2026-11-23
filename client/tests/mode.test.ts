@@ -32,7 +32,9 @@ describe("chooseMode", () => {
 
 describe("describeMode", () => {
   it("says the silent promise in one Turkish line", () => {
-    expect(describeMode("silent")).toBe("yazma anın ~%99 gizli, 10 dakikaya kadar bekler");
+    // The wait is the queue line's job (SILENT_WAIT); this sentence states the
+    // privacy and nothing else, so the two lines never say the same thing twice.
+    expect(describeMode("silent")).toBe("yazma anın ~%99 gizli");
     expect(describeMode("silent")).not.toContain("\n");
   });
 

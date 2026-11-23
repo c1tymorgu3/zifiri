@@ -204,6 +204,35 @@
   background: var(--bg);
 }
 
+/* The wordmark answers "what is this" before the visitor reads a single row.
+   It is type, not a box: no chip, no shadow, no logo. */
+.zf-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  margin-inline-end: auto;
+}
+
+.zf-brand-name {
+  color: var(--fg);
+  font-size: var(--text-15);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* A hairline, then one sentence at full strength: the claim, not a tagline. */
+.zf-brand-line {
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--hairline);
+  color: var(--muted);
+  font-size: var(--text-12);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* The one honest label in demo mode: it says what the data is, nothing more. */
 .zf-badge {
   color: var(--muted);
@@ -277,6 +306,12 @@
 
   .zf-topbar {
     padding-inline: var(--space-4);
+  }
+
+  /* On a phone the name alone fills the left half; the sentence would crowd
+     the badge and the fingerprint out of the strip. */
+  .zf-brand-line {
+    display: none;
   }
 
   .zf-rail {

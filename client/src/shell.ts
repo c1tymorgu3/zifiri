@@ -233,9 +233,19 @@ export function renderShell(root: HTMLElement, options: ShellOptions): Shell {
 
   nav.append(list);
 
-  // The top strip is not a fourth destination: a badge and the fingerprint.
+  // The top strip is not a fourth destination: a wordmark, a badge and the
+  // fingerprint. Its left half is the only place on the page that can say what
+  // the page is; leaving it empty wastes the first thing a visitor reads.
   const topbar = doc.createElement("header");
   topbar.className = "zf-topbar";
+
+  const brand = doc.createElement("div");
+  brand.className = "zf-brand";
+  brand.append(
+    span(doc, "zf-brand-name", "zifiri"),
+    span(doc, "zf-brand-line", "anonim tahta · hesap yok"),
+  );
+  topbar.append(brand);
 
   const badgeText = options.badge?.trim() ?? "";
   if (badgeText !== "") {

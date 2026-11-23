@@ -79,7 +79,7 @@ export function chooseMode(requested?: unknown): Mode {
 export function describeMode(mode: Mode): string {
   return mode === "fast"
     ? "yazma anın ~%80 gizli, mesaj hemen gider"
-    : "yazma anın ~%99 gizli, 10 dakikaya kadar bekler";
+    : "yazma anın ~%99 gizli";
 }
 
 export interface ModeChoice {

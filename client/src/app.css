@@ -147,6 +147,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   color: var(--muted);
 }
 
+/* An empty status line is not a placeholder: it is 24px of blank between the
+   strip and the surface. It takes space only when it has something to say. */
+.zf-status:empty {
+  display: none;
+}
+
 .zf-identity-slot { position: relative; }
 
 .zf-identity-head {

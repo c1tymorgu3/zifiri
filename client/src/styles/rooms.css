@@ -6,7 +6,9 @@
 
 .zf-rooms {
   display: grid;
-  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  /* 15-20rem was a column for three words: the eye reads a 320px void, not a
+     list. A narrower index reads as navigation and hands the pane the room. */
+  grid-template-columns: minmax(9.5rem, 13rem) minmax(0, 1fr);
   align-items: stretch;
   block-size: 100%;
   min-block-size: 0;
@@ -19,12 +21,19 @@
   border-inline-end: var(--hairline);
 }
 
+/* The column's heading is a caption over a list, not a page title: the rail
+   already carries the page title, and 18px of the same word 30px apart reads
+   as a stutter. Mono at 12px states the count and gets out of the way. */
 .zf-panel-title {
   margin: 0 0 var(--space-2);
-  color: var(--fg);
-  font-size: var(--text-18);
-  font-weight: 600;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
   line-height: 1.25;
+  text-transform: lowercase;
 }
 
 .zf-room-pane {
@@ -170,8 +179,11 @@
 }
 
 /* 44px rows, text first, clock last. No avatar, no name, no status tick. */
+/* The row is the measure, not the pane: at 68ch the clock sits a thumb's width
+   from the last character instead of 300px away at the pane's edge. */
 .zf-msg {
   display: grid;
+  max-inline-size: 68ch;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--space-3);
@@ -218,7 +230,7 @@
 .zf-composer-input {
   display: block;
   inline-size: 100%;
-  min-block-size: 5.5rem;
+  min-block-size: 3.5rem;
   margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--line);
@@ -294,11 +306,28 @@
   pointer-events: none;
 }
 
+/* Anonymity is the product's first-class claim, so it is set as a readout: a
+   hairline, a mono key, and a number at the same weight as the body text. It
+   used to be 12px grey wedged between two other grey strings, which read as a
+   footnote and made the one thing that matters look like an afterthought. */
 .zf-anonymity {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding-inline-end: var(--space-3);
+  border-inline-end: var(--hairline);
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: var(--text-12);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.zf-anonymity-value {
+  color: var(--fg);
+  font-size: var(--text-13);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .zf-counter {
@@ -329,10 +358,24 @@
   transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
+/* A disabled send button is still the screen's one action. Dropping it to the
+   surface colour erases the hierarchy: the visitor sees a form with no button.
+   It keeps the accent and loses only its contrast. */
 .zf-send:disabled {
-  background: var(--surface);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  color: color-mix(in srgb, var(--fg) 78%, var(--surface));
   cursor: not-allowed;
+}
+
+/* The readout, a hairline, then the sentence. One line under the input that
+   states the whole promise: how many are anonymous with you, and what the mode
+   does to what you type. */
+.zf-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-block-size: 21px;
 }
 
 .zf-consequence {
@@ -342,11 +385,32 @@
 }
 
 .zf-pending {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
   margin: 0;
   color: var(--muted);
   font-size: var(--text-13);
   font-variant-numeric: tabular-nums;
+}
+
+/* Ten ticks, one per message that may be ahead of this one. The track is a
+   rule, the fill is ink: no amber, because the accent already belongs to the
+   send button in this region. */
+.zf-queue {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.zf-queue-tick {
+  inline-size: 9px;
+  block-size: 3px;
+  background: var(--line);
+}
+
+.zf-queue-tick[data-on] {
+  background: var(--muted);
 }
 
 .zf-pending[hidden] {
@@ -445,12 +509,16 @@
 /* --------------------------------------------------------- phone layout */
 
 @media (max-width: 60rem) {
-  /* Stacked: the page flows and scrolls. A 100%-tall grid would push the
-     composer under the fixed tab bar, which is what it did before. */
+  /* The page no longer scrolls as a document: the room index keeps its strip,
+     the stream takes what is left, and the composer sits on the floor of the
+     viewport. With `interactive-widget=resizes-content` the keyboard shrinks
+     that floor instead of covering it. */
   .zf-rooms {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-3);
-    block-size: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-2);
+    block-size: 100%;
+    min-block-size: 0;
   }
 
   .zf-rooms-index {
@@ -487,19 +555,23 @@
     border-block-start: 0;
   }
 
+  /* Rules, not boxes: the chip is a name on a rule, and the room you are in
+     carries the 2px amber underline the desktop row carries on its edge. A
+     rounded container here was the one card left on the page. */
   .zf-room {
     grid-template-columns: auto auto;
     inline-size: auto;
     min-block-size: var(--tap);
-    padding-inline: var(--space-3);
-    border: var(--hairline);
-    border-inline-start: var(--hairline);
-    border-radius: var(--radius);
+    padding-inline: var(--space-2);
+    border: 0;
+    border-block-end: 2px solid transparent;
+    border-radius: 0;
   }
 
   .zf-room[aria-current="true"] {
-    border-color: var(--accent);
-    border-inline-start-color: var(--accent);
+    border-color: transparent;
+    border-block-end-color: var(--accent);
+    background: none;
   }
 
   /* The chip carries the name and the unread count; time and presence would
@@ -512,20 +584,31 @@
   .zf-room-pane {
     padding-inline-start: 0;
     block-size: auto;
+    min-block-size: 0;
   }
 
-  /* A tall stream on a phone would put the composer two screens down. */
+  /* The stream is the only thing that scrolls; the composer never leaves the
+     bottom edge, whatever the keyboard or the last message does. */
   .zf-stream {
-    max-block-size: 52vh;
+    flex: 1 1 auto;
+    max-block-size: none;
+    min-block-size: 0;
+  }
+
+  .zf-composer {
+    margin-block-start: 0;
   }
 
   .zf-composer-bar {
     gap: var(--space-2);
   }
 
-  /* A 5.5rem box plus the mode row is most of a phone screen. */
+  /* One line tall. The field grows as the writer types; it does not start as a
+     four-line box that eats a quarter of the screen. */
   .zf-composer-input {
-    min-block-size: 4rem;
+    block-size: 3.25rem;
+    min-block-size: 0;
+    overflow-y: auto;
   }
 }
 

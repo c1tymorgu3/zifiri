@@ -470,9 +470,14 @@
 
 .dm-compose-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--dm-step-3);
+}
+
+/* The count takes the slack so the send button keeps the right edge. */
+.dm-compose-row .dm-count {
+  margin-inline-start: auto;
 }
 
 .dm-count {
@@ -496,9 +501,11 @@
   transition: opacity 120ms ease-out;
 }
 
+/* Disabled is still the one action on this surface. Dropping it to the surface
+   colour deletes it from the picture and leaves a form with no button. */
 .dm-send:disabled {
-  background: var(--dm-surface);
-  color: var(--dm-muted);
+  background: color-mix(in srgb, var(--dm-accent) 30%, var(--dm-surface));
+  color: color-mix(in srgb, var(--dm-fg) 78%, var(--dm-surface));
   cursor: not-allowed;
 }
 
@@ -507,6 +514,11 @@
   margin: 0;
   color: var(--dm-muted);
   font-size: 12px;
+}
+
+/* An empty status line is 19px of blank under the send button. */
+.dm-status:empty {
+  display: none;
 }
 
 /* -------------------------------------------------------------------------
@@ -786,3 +798,43 @@
     animation: none;
   }
 }
+
+/* -------------------------------------------------------------------------
+ * The surface owns its slot
+ *
+ * `.zf-view-slot` hands a surface the full height of the panel. A surface that
+ * does not flex leaves its composer floating mid-page with 50px of dead paper
+ * under it — the panel ends, the page does not. On a wide screen the thread
+ * takes the height and the composer sits on the floor, where the eye looks for
+ * it after reading the last message.
+ * ---------------------------------------------------------------------- */
+
+.dm {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+@media (min-width: 60.0625rem) {
+  .dm-body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .dm-thread {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .dm-messages {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
+  .dm-compose {
+    margin-block-start: auto;
+  }
+}
+

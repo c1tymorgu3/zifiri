@@ -29,6 +29,9 @@ export const CHAR_LIMIT = 500;
 /** The sentence the silent mode is sold with; kept in one place so the copy cannot drift. */
 export const SILENT_WAIT = "10 dakikaya kadar bekler";
 
+/** Ticks in the silent-mode queue bar; one per message that may be ahead. */
+export const QUEUE_TICKS = 10;
+
 export const EMPTY_ROOMS = "Henüz oda yok; ilk oda açıldığında burada listelenir.";
 
 export const EMPTY_MESSAGES = "Bu odada henüz mesaj yok; ilk mesaj 10 dakikalık kovaya girer.";
@@ -332,7 +335,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   const input = element(doc, "textarea", "zf-composer-input");
   input.id = inputId;
-  input.rows = 3;
+  input.rows = 2;
   input.setAttribute("placeholder", "Odaya yaz");
   input.setAttribute("aria-describedby", `${consequenceId} ${counterId}`);
 
@@ -361,9 +364,14 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
     modes.append(option);
   }
 
+  // Anonymity is the product, not a footnote: a key and a number, separated
+  // from the mode switch by a hairline, with the number carrying the weight.
   const anonymity = element(doc, "span", "zf-anonymity");
   anonymity.setAttribute("role", "status");
   anonymity.setAttribute("aria-live", "polite");
+  const anonymityKey = element(doc, "span", "zf-anonymity-key");
+  const anonymityValue = element(doc, "span", "zf-anonymity-value");
+  anonymity.append(anonymityKey, anonymityValue);
 
   const counter = element(doc, "span", "zf-counter");
   counter.id = counterId;
@@ -372,13 +380,29 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   send.type = "submit";
   send.textContent = "Gönder";
 
-  bar.append(modes, anonymity, counter, send);
+  bar.append(modes, counter, send);
 
   const consequence = element(doc, "p", "zf-consequence");
   consequence.id = consequenceId;
 
+  // The readout and the sentence it explains share a line, so anonymity is the
+  // first thing under the input instead of a third grey string in a bar that
+  // wraps on a phone the moment a number gets wide.
+  const note = element(doc, "div", "zf-note");
+  note.append(anonymity, consequence);
+
+  // The queue is drawn as well as counted: ten ticks, filled by the number of
+  // messages ahead of this one. A wait is easier to accept when it is visible.
   const pendingLine = element(doc, "p", "zf-pending");
   pendingLine.setAttribute("data-role", "pending");
+  const queue = element(doc, "span", "zf-queue");
+  queue.setAttribute("aria-hidden", "true");
+  const queueTicks: HTMLElement[] = [];
+  for (let index = 0; index < QUEUE_TICKS; index += 1) {
+    const tick = element(doc, "span", "zf-queue-tick");
+    queueTicks.push(tick);
+    queue.append(tick);
+  }
 
   const pow = element(doc, "div", "zf-pow");
   pow.setAttribute("data-role", "pow");
@@ -398,7 +422,7 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
 
   pow.append(powBar, powLabel, powCancel);
 
-  form.append(label, input, bar, consequence, pendingLine, pow);
+  form.append(label, input, bar, note, pendingLine, pow);
 
   room.append(head, stream, form);
   section.append(index, room);
@@ -414,7 +438,12 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
   }
 
   function paintAnonymity(): void {
-    anonymity.textContent = `anonimlik: ${anonymityCount(mode, recent)}`;
+    // Fast mode is honest about its narrow window: the number is who else wrote
+    // in the last minute, so the key says "şu an". Silent mode is the mode the
+    // number describes, and it says so without hedging.
+    anonymityKey.textContent = mode === "fast" ? "şu an anonimlik: " : "anonimlik: ";
+    anonymityValue.textContent = String(anonymityCount(mode, recent));
+    anonymity.setAttribute("data-mode", mode);
   }
 
   function paintCounter(): void {
@@ -432,12 +461,21 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
     // mode has no queue, so the line is not drawn at all.
     if (mode !== "silent") {
       pendingLine.setAttribute("hidden", "");
-      pendingLine.textContent = "";
+      pendingLine.replaceChildren();
       return;
     }
     pendingLine.removeAttribute("hidden");
     pendingLine.textContent =
       pending <= 0 ? `${SILENT_WAIT} · bekleyen yok` : `${SILENT_WAIT} · ${pending} bekliyor`;
+    // The text is the line; the bar rides at the end of it and says the same
+    // thing without words.
+    pendingLine.append(queue);
+    // One tick per message ahead; the bar reads as a wait, not a spinner.
+    const filled = Math.min(QUEUE_TICKS, Math.max(0, pending));
+    for (let index = 0; index < queueTicks.length; index += 1) {
+      if (index < filled) queueTicks[index]?.setAttribute("data-on", "");
+      else queueTicks[index]?.removeAttribute("data-on");
+    }
   }
 
   function paintRoomHead(): void {
@@ -465,6 +503,9 @@ export function createRoomsView(options: RoomsViewOptions): RoomsView {
         ? {}
         : { onSelect: (roomId: string) => options.onSelectRoom?.(roomId) }),
     });
+    // The rail already says "Odalar"; a heading that repeats it is a second
+    // title with nothing to say. The count is the information this column owns.
+    indexTitle.textContent = rooms.length === 1 ? "1 oda" : `${rooms.length} oda`;
   }
 
   function setMode(next: Mode): void {
