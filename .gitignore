@@ -48,3 +48,9 @@ pepper
 hostname
 hs_ed25519_*
 *.onion
+
+# built client bundles are produced by `make static`, not committed
+priv/static/assets/
+priv/static/index.html
+priv/static/*.png
+priv/static/robots.txt

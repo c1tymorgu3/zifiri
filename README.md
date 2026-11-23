@@ -1,30 +1,35 @@
+<p align="center"><img src="assets/logo.svg" alt="zifiri" width="128"></p>
+
 # zifiri
 
-Self-hosted, three surfaces, no accounts — and a written record of exactly what it does
-not hide.
+**An anonymity project.** Three surfaces, a written threat model, and a command that can
+refute every claim in this file.
 
-> **zifiri** is a message board with no accounts. It keeps nothing that could tell you who
-> wrote a line: no email, no session, no cookie, no author field, and the application never
-> reads your IP address.
+> zifiri exists to publish a line without leaving a person behind it. No account, no email,
+> no session, no cookie, no author column, and the application never reads your IP address.
 >
-> What it does not hide: on a clearnet instance the network path in front of the app
-> (nginx, the kernel, the host) can still see your IP, and the operator can recognise the
-> server's own decoy traffic, so there is no anonymity claim against the operator. Run it
-> as a Tor onion service and the server never sees an IP at all. Each claim and the command
-> that checks it: [claims.md](docs/claims.md).
+> The interesting part is not the missing login form. It is the measured claim: a message
+> joins a ten-minute bucket filled to 120 indistinguishable entries, so an observer reading
+> the wire picks the real one with probability **1/120** — a number you can reproduce with
+> one script, not a promise.
+>
+> What it does not hide: on clearnet the path in front of the application still sees your
+> IP, and an operator can recognise their own decoy traffic. An onion service removes the
+> first; nothing removes the second. That paragraph is the difference between a threat
+> model and marketing.
 
-![The write path: pad, prove, queue, turn, publish](assets/write-path.svg)
+**Content is not this project's subject.** What gets posted is the decision of whoever runs
+an instance; this repository is about who can be identified, and about making that answer
+checkable. Every guarantee, and the command that tests it: [claims.md](docs/claims.md).
 
-## What this is not
+## What it deliberately is not
 
-- **Not a place to point at people.** No personal data about third parties, no
-  targeting, no doxxing. That is a product rule, enforced in moderation — not a moral
-  lecture on the homepage.
-- **Not a leak archive.** There is no dump, no mirror, no "post it here instead".
 - **Not a social network.** No follows, no likes, no profiles, no public history.
 - **Not a marketplace.** Listings are text; payment, escrow and shipping happen
-  elsewhere, at the users' own risk.
+  elsewhere, at the user's own risk.
 - **Not an app.** Web only, works in a phone browser, no install.
+- **Not a promise of absolute anonymity.** The operator is outside the model, and content
+  that describes its author defeats every design. Both are stated, not hidden.
 
 ## The three surfaces
 
@@ -71,8 +76,6 @@ Twenty-three of the forty-nine rows are above — the ones a reader can check wi
 command. The rest (unproven claims, deployment-level checks, text audits, and the four that
 are honestly still red) are in [`docs/claims.md`](docs/claims.md).
 
-![Deletion in three levels, two of them claimed](assets/delete-levels.svg)
-
 ## Quick start
 
 ```bash
@@ -112,8 +115,6 @@ here rather than rounded off.
 - **Deletion stops at level 2.** `docs/claims.md` row C-39 is red and C-40 is unproven:
   VACUUM still runs on the delete path and `auto_vacuum` is not configured. The decision is
   recorded, the code has not caught up, and the doc says so.
-
-![The threat boundary: what a seized disk holds and what it never holds](assets/threat-boundary.svg)
 
 ## Decisions
 
