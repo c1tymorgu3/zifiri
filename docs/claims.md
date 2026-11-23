@@ -1,6 +1,6 @@
 # zifiri — claims, tests, thresholds
 
-Snapshot: 2026-11-23 14:40, `mix test` **402 passed, 4 excluded**, `cd client && npx vitest run` **300 passed**.
+Snapshot: 2026-11-23 15:26, `mix test` **403 passed, 4 excluded**, `cd client && npx vitest run` **300 passed**.
 
 The anonymity claim is the product. Everything else in this repository exists to make
 that claim checkable: a test, a command, a number, a date. What an instance publishes
@@ -9,9 +9,10 @@ whether that answer survives contact with the code.
 
 A1 — the operator — is outside the model. The design assumes the operator complies and
 minimises what compliance yields: no account, no sender column, **1/120** positions
-inside a ten-minute bucket, a **4096 B** envelope that never varies, a **71-character**
-identity line that carries no public key. A row below is either inside that model or
-explicitly outside it; the rows outside it are named, not softened.
+inside a ten-minute bucket on the 1:1 plane (a room has no filler, so it has `k`), a
+**4096 B** envelope that never varies, a **71-character** identity line that carries no
+public key. A row below is either inside that model or explicitly outside it; the rows
+outside it are named, not softened.
 
 Every claim below comes from the contract in `docs/spec.md`. The `§` numbers in the
 tables are the plan's section numbers; the plan itself is not in this repository and not in
@@ -22,16 +23,18 @@ row says "green", the claim was run with the listed command and passed; "red" me
 was run and failed; "none" means there is no test and the claim is **unproven** — being
 written in the plan does not make it true.
 
-Every claim carries a stable ID (`C-01` … `C-49`) so that this file, `docs/verify.md`
+Every claim carries a stable ID (`C-01` … `C-51`) so that this file, `docs/verify.md`
 and the README can be diffed against each other instead of against prose.
 
-> **Provenance.** The suite snapshot was taken on **2026-11-23, 13:52**; the
-> per-row solo counts were taken earlier the same day (12:24–13:52), on a checkout
-> whose test tree compiles. `mix test` finished in 5.3 s with **399 passed, 4
-> excluded**; `cd client && npx vitest run` finished with **299 passed** in 15 files.
+> **Provenance.** The suite snapshot was taken on **2026-11-23, 15:26**; the
+> per-row solo counts were taken earlier the same day (12:24–15:26), on a checkout
+> whose test tree compiles. `mix test` finished in 8.8 s with **403 passed, 4
+> excluded**; `cd client && npx vitest run` finished with **300 passed** in 15 files.
 > Each row's count also comes from a solo `mix test test/<name>_test.exs`,
-> and the bucket work added 16 tests — 10 in `mailbox_bucket_test`, 6 in
-> `chat_bucket_test` — for a whole-suite total of 399.
+> and the bucket work added 17 tests — 11 in `mailbox_bucket_test`, 6 in
+> `chat_bucket_test` — for a whole-suite total of 403.
+> `decoy_shape_test` was rewritten to the 1:1 frame (C-04) and `api_surface_test`'s
+> secret-mode row now expects a 1-message batch (C-50); no test was deleted.
 > The 2026-11-22 snapshot this file used to carry is gone: it described a repository that
 > no longer exists (a `posts` table in the allowlist, two compile breaks, a shared test
 > DB) and none of its numbers can be reproduced.
@@ -47,10 +50,10 @@ Status dictionary:
 
 | Status | Rows |
 |---|---|
-| Green | 38 |
+| Green | 39 |
 | Flaky | 1 (C-11) |
 | Red | 0 |
-| None | 10 (C-07, C-13, C-21, C-29, C-31, C-35, C-36, C-40, C-42, C-49) |
+| None | 11 (C-07, C-13, C-21, C-29, C-31, C-35, C-36, C-40, C-42, C-49, C-51) |
 
 Nothing is written without a number, a date and a command.
 
@@ -64,15 +67,15 @@ transaction on a single database. The measurement is therefore two commands, not
 
 | Command | Result | Time |
 |---|---|---|
-| `mix test` | **399 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 5.3 s |
-| `cd client && npx vitest run` | **299 passed**, 15 files | 1.1 s |
+| `mix test` | **403 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 8.8 s |
+| `cd client && npx vitest run` | **300 passed**, 15 files | 1.9 s |
 
 The per-file runs in §1 were taken one after another on the same checkout; their counts
-sum to 399, so a green row is not an artifact of running it alone.
+sum to 403, so a green row is not an artifact of running it alone.
 
 The parallel-rewrite window the previous snapshot described is closed. The transitional
 `posts` table is gone from the migrated schema (C-19), `api_surface_test` compiles and
-passes (19/19), and no run in this session produced a lock error or a compile error.
+passes (22/22), and no run in this session produced a lock error or a compile error.
 
 ---
 
@@ -80,12 +83,12 @@ passes (19/19), and no run in this session produced a lock error or a compile er
 
 | ID | Claim (plan §) | Why it matters | Test | Threshold | Today |
 |---|---|---|---|---|---|
-| C-01 | A bucket is ten minutes, target 120, aligned to the wall clock (§6.1) | The ten-minute bucket is the unit of anonymity: **1/120** is the whole claim. | `bucket_test` + `chat_bucket_test` (live room path) | a boundary instant opens the bucket; 120 target; 3 secret sends drain to 120 | **Green** — 14/14 + 6/6 |
+| C-01 | A bucket is ten minutes, target 120, aligned to the wall clock (§6.1) | The ten-minute bucket is the unit: it hides the moment of writing. The 1/120 figure belongs to 1:1 cover, not to a room batch. | `bucket_test` + `chat_bucket_test` (live room path) | a boundary instant opens the bucket; 120 target on the 1:1 plane; 3 room sends drain as one batch of 3 | **Green** — 14/14 + 6/6 |
 | C-02 | The bucket drains on the clock, not on a count; the drain is shuffled; a closed bucket carries over (§6.1) | A drain on arrival order hands the observer the order of writes. | `bucket_test` + `chat_bucket_test` (live room path) | a full bucket does not drain early; stored order is not arrival order; empty bucket is a no-op | **Green** — 14/14 + 6/6 |
-| C-03 | An empty bucket is filled with 120 decoys; `fill(n)` = `n − real` (§6.2) | An empty bucket says "one message was sent"; a full one says only "**120** arrived". | `decoy_test` + `chat_bucket_test` (live room path) | `r=0` → 120; `r>120` → 0; 3 real sends land as 3 real + 117 decoys | **Green** — 15/15 + 6/6 |
-| C-04 | A decoy is the same 1024 B chat frame as a real message: same envelope header, same zero tail, body random bytes (the body of a real message is text, which C-04 names as the limit) | If a decoy can be told apart, the padding is decoration and **1/120** is a fiction. | `decoy_shape_test` + `decoy_test` + `chat_bucket_test` (live room path) | 6/6 shape tests; no chi-square/entropy separation; 117 stored decoys are 4096 B sealed envelopes | **Green** — 6/6 + 15/15 + 6/6 |
-| C-05 | The moment of writing is hidden: the real message's position inside the bucket is uniform (§3.1) | The position inside the bucket is the only clock an observer has left. | `timing_test` + `chat_bucket_test` (live room path) | uniform over 0..119 in 1000 samples; an empty bucket loses nothing; the room path holds a message until the drain | **Green** — 3/3 + 6/6 |
-| C-06 | The decoy key is per bucket, in RAM; the next bucket gets a different key (§6.3) | A key on disk lets a disk image separate real from decoy after the fact. | `decoy_test` + `chat_bucket_test` (live room path) | one key per bucket; not on disk; 117 decoys carry 117 distinct keys through the store | **Green** — 15/15 + 6/6 (the key is not written to disk; live memory is out of scope) |
+| C-03 | **1:1 only:** a non-empty bucket is completed to 120 with decoys; `fill(n)` = `n − real`; a room batch is never filled (§6.2) | On the 1:1 plane an empty or short bucket would say "one message was sent"; on a plaintext room the filler would only inflate the candidate set (C-50). | `mailbox_bucket_test` + `decoy_test` | 3 real → 120 rows (3 + 117 decoys), one transaction; `r>120` → 0; an empty bucket publishes nothing on either plane | **Green** — 11/11 + 15/15 |
+| C-04 | **1:1 only:** a decoy is the same *frame* as a real 1:1 envelope — 4096 B, valid length prefix, zero tail; body random. Rooms publish no decoys. | If a decoy can be told apart by its frame, the padding is decoration and 1/120 is a fiction. The limit is named: the length prefix is plaintext, so the byte count is visible. | `mailbox_bucket_test` + `decoy_shape_test` | every decoy decodes `{:ok, _, 4096}`; 4096 B; no decoy body reads as text (printable ratio < 0.5 vs ~1.0 for text); ids random, no ordered pattern | **Green** — 11/11 + 6/6 |
+| C-05 | The moment of writing is hidden: the real message's position inside the batch is uniform (§3.1) | The position inside the batch is the only clock an observer has left. | `timing_test` + `chat_bucket_test` (live room path) | uniform over 0..119 in 1000 samples (synthetic bucket; a room batch is k, C-50); an empty bucket loses nothing; the room path holds a message until the drain | **Green** — 3/3 + 6/6 |
+| C-06 | The decoy key is per bucket, in RAM; the next bucket gets a different key (§6.3) | A key on disk lets a disk image separate real from decoy after the fact. | `decoy_test` | one key per bucket; not on disk; a fill of 20 carries 20 distinct keys | **Green** — 15/15 (the key is not written to disk; live memory is out of scope) |
 | C-07 | Fast mode: < 1 s, the neighbourhood is the count of writes in the last sixty seconds (§3.4) | Fast mode is the default, so its **1-in-5** neighbourhood is the number most users actually get. | `fast_mode_test` | p95 < 1 s; neighbourhood 5 | **None** — no `fast_mode_test` exists; the latency is unmeasured |
 | C-08 | The 1:1 table has 5 columns; no sender/conversation/account column (§7.2) | A sender column puts a name back on the row the whole design removes. | `mailbox_test` | `PRAGMA table_info` is exactly 5 columns | **Green** — 30/30 |
 | C-09 | 1:1 addressing is a 16 B HMAC tag; the key is not stored; the tag is deterministic and key-specific (§7.1) | The tag addresses a mailbox without storing the key that produced it. | `mailbox_test` | same key → same tag; different key → different tag | **Green** — 30/30 |
@@ -93,8 +96,8 @@ passes (19/19), and no run in this session produced a lock error or a compile er
 | C-11 | 1:1 TTL is 72 hours; an expired envelope is not read and the sweeper deletes it (§7.3) | Expiry bounds how long a mailbox can be watched before it is empty by construction. | `mailbox_test` | default 72 h; sweeper every 5 min | **Flaky** — 30/30 today; 24/25 on 2026-11-22 (sweeper window on a slow machine, no fixed clock) |
 | C-12 | 1:1 paging: 200 upper bound, the `since` cursor neither skips nor repeats, `ack` never deletes another box (§7.3) | A cursor that skips or repeats lets a reader infer traffic that is not there. | `mailbox_test` | 200 clamp; id monotonic | **Green** — 30/30 |
 | C-13 | The recipient cannot open a decoy envelope (§7.4) | A decoy the recipient can open is a message; the recipient must see noise, not content. | — | even on a tag match, AEAD does not open | **None** |
-| C-14 | 1:1 envelopes also accumulate in the bucket and are completed to 120 with decoys (§7.4) | Without the bucket, 1:1 writes its own arrival clock and **1/120** does not apply to it. | `mailbox_bucket_test` | 120 envelopes per bucket: 3 real + 117 decoys, one transaction | **Green** — 10/10 |
-| C-15 | Listings: plaintext metadata, `owner_hash` not unique, `created_day` is a day, search `LIKE` is escaped, `erase/2` deletes all of an owner's listings (§8) | Listings are public by design; the claim is only that no account sits behind them. | `listings_test` (+ `api_surface_test` at the endpoint level) | 33 tests; 19 endpoint tests | **Green** — 33/33 + 19/19 |
+| C-14 | 1:1 envelopes also accumulate in the bucket and are completed to 120 with decoys (§7.4) | Without the bucket, 1:1 writes its own arrival clock and 1/120 does not apply to it. | `mailbox_bucket_test` | 120 envelopes per bucket: 3 real + 117 decoys, one transaction | **Green** — 11/11 |
+| C-15 | Listings: plaintext metadata, `owner_hash` not unique, `created_day` is a day, search `LIKE` is escaped, `erase/2` deletes all of an owner's listings (§8) | Listings are public by design; the claim is only that no account sits behind them. | `listings_test` (+ `api_surface_test` at the endpoint level) | 33 tests; 22 endpoint tests | **Green** — 33/33 + 22/22 |
 | C-16 | With presence off there is no trace; `:unknown`; mutual for 5 min; turning it off deletes the row; ETS only (§9) | Presence is the one place where "off" must mean no row, not a row saying off. | `presence_test` | 31 tests; nothing written to disk or logs | **Green** — 31/31 |
 | C-17 | Deletion level 1: the row goes, there is no tombstone, the file is untouched (§10.2) | Level 1 is the API promise: the row leaves every read path. | `vanish_test` | `{:ok, n}`; file size unchanged | **Green** — 33/33 |
 | C-18 | Deletion level 2: `secure_delete` + WAL truncate + VACUUM; the body is found in neither the file nor the `-wal`; `busy` is reported honestly (§10.2) | Level 2 is the disk promise: the body is in neither the file nor the `-wal`. | `vanish_test` | `strings` scan clean; `freelist_count = 0` | **Green** — 33/33 |
@@ -154,17 +157,18 @@ These are written in the plan but have no test; today they are intent, not claim
 | Fast mode < 1 s, 1/5 neighbourhood (C-07) | `fast_mode_test` | without the mode the user abandons silent mode; "80%" cannot be said without measuring. The default mode itself is C-30 and is green; only the latency is unmeasured |
 | The recipient cannot open a decoy envelope (C-13) | a separate test inside `mailbox_test` | if decoy envelopes look like "you have a message" to the recipient, 1:1 breaks |
 | No logs — deployment level (C-21) | `drill` (script + output) | `no_log_test` inspects code only; proxy/container/BEAM settings are unmeasured |
+| Room content is not confidential (C-51) | README's "120 candidates" sentence has to go first | the spec now says it plainly, but one README line still promises what a room cannot deliver; the audit command is in §6 |
 
 The listings HTTP surface is no longer on this list: `api_surface_test` compiles and
-passes 19/19 today.
+passes 22/22 today.
 
 ---
 
 ## 4. Known limits of the measurement
 
 1. **The full suite is valid now.** One process, one DB, sandboxed tests:
-   `mix test` → 399 passed, 4 excluded in 5.3 s, and the solo runs in §1 add up to the
-   same 399. The 2026-11-22 failure mode (shared file, lock contention, 130 errors) does
+   `mix test` → 403 passed, 4 excluded in 8.8 s, and the solo runs in §1 add up to the
+   same 403. The 2026-11-22 failure mode (shared file, lock contention, 130 errors) does
    does not recur on this checkout.
 2. **Timing sensitivity remains.** The `mailbox` sweeper test fell in one 2026-11-22 run
    (5 min window plus a slow machine) and has passed since; there is no fixed-clock
@@ -176,7 +180,7 @@ passes 19/19 today.
 
 ---
 
-## 5. Post-decision claims — re-measured 2026-11-23 12:24–12:28
+## 5. Post-decision claims — re-measured 2026-11-23 12:24–15:26
 
 The six decisions in `docs/spec.md` turned into claims. The status column is the
 output of the command run in this session; an unrun row is **None**, never a guess.
@@ -205,6 +209,8 @@ output of the command run in this session; an unrun row is **None**, never a gue
 | C-47 | `mailbox_id` is derived from the seed by HKDF | A derived id looks random without the seed and changes with the generation. | `mix test test/identity_test.exs` | matches a reference vector; changes with the generation | **Green** (29 passed) |
 | C-48 | "Write it on paper" is not claimed in v1 | 64 characters are not written by hand; claiming it would be a promise the format cannot keep. | text audit (`spec.md` §Identity line) | absent from the v1 copy | **Green (text)** |
 | C-49 | The v2 word list is 27 words | A 12-word list carries 128 bits and cannot hold a 32-byte seed; **27 words** can. | `identity_test` v2 group | 27 words | **None** (v2 is not written) |
+| C-50 | A plaintext room publishes no decoys: a secret-room batch contains exactly the messages written in it, and the candidate author set is `k`, not 120 | Padding a plaintext room would make "120 candidates" a false sentence while the content is readable anyway; the batch must be counted, not assumed. | `chat_bucket_test` (+ `api_surface_test` at the endpoint) | 3 sends → 3 stored rows, bodies byte-identical, 3 distinct pubkeys; 1 secret send over the API → 1 entry | **Green** — 6/6 (+ 22/22) |
+| C-51 | Room content is not confidential: secret mode hides the moment of writing, not what was written | If the text implied a room body was hidden, a user would confide in a channel the server reads in clear. | text audit (`docs/spec.md` §Two modes + §1; README §"Rooms") | the sentence exists in the spec; no text claims room confidentiality or "120 candidates" for a room | **None** — `docs/spec.md` carries the sentence, but README lines 37 and 185 still say "120 candidates" and are being rewritten; re-audit after they land |
 
 **Reading note.** C-38, C-39 and C-40 are three different sentences.
 C-38 is the disk promise — no trace in the file or the `-wal` — and is green.
@@ -215,7 +221,15 @@ same trade-off. C-40 is the alternative that was **not** taken: `auto_vacuum` ap
 nowhere in `lib/`, `config/` or `priv/`, so the file only shrinks through the
 delete-path `VACUUM`. None of the three is softened into the others.
 
-**Limit.** The full suite *was* run today (399 passed, 4 excluded, §0). Every row above
+**Reading note (the decoy split).** C-03 and C-04 are 1:1 claims: the filler
+completes a mailbox bucket to 120, and its frames are real 4096 B envelopes. They
+are not room claims any more, because a plaintext room publishes no decoys at all
+(C-50) — padding it would inflate the candidate set from `k` to 120 in prose
+while the observer reads the batch anyway (C-51). `Zifiri.Chat.Decoy` still
+exists and `decoy_test` still measures its key discipline (C-06), but nothing in
+`lib/` calls it; the room's only bucket cost is the wait for the drain.
+
+**Limit.** The full suite *was* run today (403 passed, 4 excluded, §0). Every row above
 also has its solo run, and the solo counts match the suite.
 
 ---
@@ -245,6 +259,8 @@ mix test test/owner_test.exs
 mix test test/pow_test.exs
 mix test test/chat_test.exs
 mix test test/api_test.exs
+mix test test/chat_bucket_test.exs
+mix test test/mailbox_bucket_test.exs
 
 # the whole suite, and the client's
 mix test
@@ -256,7 +272,17 @@ grep -rnE 'remote_ip|x-forwarded-for' --include='*.ex' lib | grep -v transport.e
 grep -E '^[[:space:]]*access_log' infra/nginx.conf | grep -vcE 'access_log[[:space:]]+off;'
 grep -rn auto_vacuum --include='*.ex' lib config priv   # expected: 0
 mix run -e 'IO.inspect(Zifiri.Repo.query!("PRAGMA auto_vacuum").rows)'   # expected: [[0]]
+
+# C-51 text audit: the room sentence is there, and nothing claims a room body is hidden
+grep -c 'hides the moment of writing' docs/spec.md   # expected: 1
+grep -ni '120 candidates' docs/spec.md README.md     # expected today: README.md:37, README.md:185
 ```
+
+The second C-51 command is the audit, not a formality: on 2026-11-23 it returns
+two README lines ("an observer has 120 candidates", "gives 120 candidates whether
+one person posts or twenty"), which is why C-51 is **None** and not green — the
+spec is fixed, the README is not, and the README is edited by the release pass,
+not by this one.
 
 A change that turns a row green is recorded in this document together with the output
 of the same command; the words "done" on their own are not accepted.

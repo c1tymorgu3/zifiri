@@ -5,7 +5,9 @@ Target: a measured number against a defined adversary; A1 is outside the model.
 A claim is not absolute, it is measured: a number means nothing until the
 adversary is defined. This file writes both together. Two numbers stand apart:
 
-- **A2/A3** (passive observer, fake user): bucket + decoy, **99.2%**.
+- **A2/A3** (passive observer, fake user): 1:1 mail — bucket + decoy, **99.2%**.
+  A plaintext room gets no percentage: its batch is `k`, the number of writers in
+  the window (`docs/claims.md` C-50).
 - **A1** (operator): **outside the model**. The design assumes the operator
   complies and, when they do, keeps what they get to the minimum: no account,
   no sender column, ciphertext and hashes. Once cover is live and measured the
@@ -16,8 +18,8 @@ adversary is defined. This file writes both together. Two numbers stand apart:
 | class | capability | claim |
 |---|---|---|
 | A1 operator | database, disk, deploy key. Does not resist a constitutional demand. | **no claim on the time of writing or on IP**; after cover, "set ≤ k". The absence of a writer column is a separate claim (schema test) |
-| A2 passive observer | watches traffic, sees packet size and time | bucket padding + decoy, 99.2% |
-| A3 fake user | unlimited keys, can pay PoW, can join the pool | the bucket is filled to a fixed size; a decoy's origin is unknown |
+| A2 passive observer | watches traffic, sees packet size and time | 1:1: bucket padding + decoy, 99.2%. A room: no decoy, the batch is `k` (C-50) |
+| A3 fake user | unlimited keys, can pay PoW, can join the pool | on 1:1 the bucket is filled to a fixed size; a decoy's origin is unknown. A room batch has no filler to hide behind |
 | A4 curious reader | reads the content, infers from style | **no claim** — if the content describes itself there is no fix |
 
 Out of scope: a global passive observer (both ingress and egress), device
@@ -31,10 +33,12 @@ the model ends:
 - **The server produces its own decoys.** Whoever writes the padding
   distinguishes the real item from the decoy; the decoy travelling the same
   path, with the same PoW and the same envelope, does not change that. So
-  padding **does not protect against A1**.
-- **The set against A1 is k**, the number of clients that sent cover in that
-  10-minute window. In a room of 3, k = 3. "99%" would only be true once
-  k ≥ 120; that is why no percentage is written for A1.
+  padding **does not protect against A1**. On the room plane there is not even
+  that: no decoy is minted (C-50).
+- **The set against A1 is k**, the number of clients that sent in that 10-minute
+  window — on a room it is the writers in the window, and `k = 3` is three
+  candidates, not 120. `"99%"` would only be true once `k ≥ 120`; that is why no
+  percentage is written for A1.
 - Today there is **no cover**; for A1 the published text contains no claim.
   Once cover is live and measured the claim becomes **"set ≤ k"**. The k shown
   is an **upper bound** (A3 can inflate it with fake clients): the text says
@@ -43,7 +47,9 @@ the model ends:
   A1 is written.** Cover still shapes the write: 1:1 envelopes collect in the
   same ten-minute bucket and are completed to 120 with decoys before anything
   is stored. What differs is durability — the bucket is RAM, the completed
-  batch is on disk for 72 h.
+  batch is on disk for 72 h. **On the room plane no decoy is minted at all**: a
+  room is plaintext, padding it would hide nothing, and the batch is exactly the
+  messages written in the window (C-50, C-51).
 
 Rules for cover to work (in force once cover is live):
 
@@ -56,11 +62,13 @@ Rules for cover to work (in force once cover is live):
    broadcast. The assumption of 0.35–3.5 s per write in a browser was **not
    measured**.
 
-## The number: bucket size = anonymity set
+## The number: bucket size = anonymity set — 1:1 cover only
 
-Publishing happens in **buckets**. Every bucket is filled to a fixed size with
-decoys, then shuffled and published. The observer sees `n` messages in the
-bucket and picks the real one with probability 1/n.
+On the 1:1 plane, publishing happens in **buckets**. Every non-empty mailbox
+bucket is completed to a fixed size with decoys, then shuffled and written. The
+observer sees `n` envelopes in the bucket and picks the real one with
+probability 1/n. **This table is not a room table**: a room publishes no decoys,
+so its batch is `k` writers and the probability is 1/`k` (C-50).
 
 | bucket | probability | traffic (4 KB × n / 10 min) | per day |
 |---|---|---|---|
@@ -90,22 +98,27 @@ store, and the channel is where they split (`lib/zifiri/chat/room_channel.ex`,
   `Zifiri.Bucket.add({:chat, "chat:lobby", message})` and the client gets
   `%{status: "queued", mode: "secret"}`. The store is **not** written and the
   room is **not** broadcast to. At the bucket's close
-  `Zifiri.Chat.BucketHandler` pads the batch to 120 with `Zifiri.Chat.Decoy`
-  frames, shuffles it and calls the same `Store.submit/2` once per frame.
-  Latency is 0–10 minutes (5 on average) plus the tick, and the frame sits in
-  RAM in the meantime — the bucket is not on disk.
+  `Zifiri.Chat.BucketHandler` takes exactly the messages written in the window —
+  **no decoys are appended** — shuffles them and calls the same `Store.submit/2`
+  once per message. A batch of `k` messages has `k` candidate authors, not 120
+  (C-50); what the wait hides is *when* a line was written and nothing about
+  what it says (C-51). Latency is 0–10 minutes (5 on average) plus the tick,
+  and the frames sit in RAM in the meantime — the bucket is not on disk.
 
 The shuffle permutes senders, not a sender's own stream: a lower counter from a
 known key is read as a replay, so one member's frames stay in counter order
-inside the batch. Several senders' frames — and the 117 decoys — interleave
-arbitrarily, which is the order an observer sees either way.
+inside the batch. Several senders' frames interleave arbitrarily, which is the
+order an observer sees either way. With `k = 1` there is nothing left to
+permute, and the drain is a timestamp, not a crowd.
 
-**Limit of this slice.** A chat frame is 256 or 1024 B (`Zifiri.Chat.Body`),
-while a decoy is a 4096 B sealed envelope. In the mailbox plane every frame is
-4096 B, so C-04 holds there; in the chat store the body length — and the fact
-that a decoy does not parse as a chat frame — still separates a real write from
-a decoy. Minting chat-sized decoys (256/1024 B, valid `Body` frames) is what
-closes that hole, and this slice does not do it.
+**Limit: content is not hidden.** A chat frame is 256 or 1024 B
+(`Zifiri.Chat.Body`) and its body is plaintext in the store and on the wire. No
+decoy distinguishes a real write from a fake one on this plane — there is no
+decoy to distinguish: the batch is the writes. What the bucket buys is the
+*clock*: every line in a window appears at one drain instant, shuffled among the
+other writers. What it does not buy is confidentiality, and the text says so
+(C-51). Whoever wants the body hidden has to seal it before sending; v1 does not
+do that for rooms.
 
 ## Two modes — fast is the default
 
@@ -117,14 +130,21 @@ is not a chat. So **the default is fast mode**.
   anonymity you have is the number of writes in the last sixty seconds, and the
   button prints it. Latency < 1 s. Warning text: "fast send · anonymity right now: N".
 - **Secret send:** the name of silent mode in the interface. The message enters
-  the 10-minute bucket, the bucket is filled to 120 with decoys, shuffled and
-  published. Latency ≤ 10 min. Warning: "your moment of writing is ~99%
-  hidden".
+  the 10-minute bucket and leaves at the drain, shuffled with whatever else was
+  written in the same window — no decoys are added, so the batch is `k`, not
+  120. Latency ≤ 10 min. Warning: "your write moment is blurred · what you
+  wrote is not hidden". Secret mode hides the moment of writing, not what was
+  written (C-51).
 
 The trade-off is written on the button — not hidden:
 
 - Fast: **"fast send · anonymity right now: 1"**
-- Secret send: **"secret send · anonymity: 120 · ≤ 10 min"**
+- Secret send: **"secret send · k in this window · ≤ 10 min"**
+
+The client copy in `client/src/ui/mode.ts` still prints `anonymity: 120` for
+secret mode, and `rooms.ts` still carries `BUCKET_SIZE = 120`. That number
+belongs to 1:1 mail (C-04); on a room it is not true, and it is the open half of
+C-51 to fix with the README in the release pass.
 
 The number shown in fast mode is **the message count of the last 60 seconds**;
 with no traffic it is 1. Fast being the default does not make the claim
@@ -271,9 +291,9 @@ With the `zifiri1` prefix it is **71** characters; one line on screen.
 
 | # | claim | test | threshold |
 |---|---|---|---|
-| 1 | The bucket always fills to 120 | `decoy_fill_test` | every bucket `n = 120` |
-| 2 | A decoy is genuinely indistinguishable | `decoy_shape_test` | same size, envelope, signature |
-| 3 | The moment of writing is hidden (secret send) | `timing_test` | 1 in 120 candidates |
+| 1 | A 1:1 bucket fills to 120 | `mailbox_bucket_test` | 3 real + 117 decoys = 120 rows, one transaction |
+| 2 | A 1:1 decoy is the same frame as a real envelope | `decoy_shape_test` + `mailbox_bucket_test` | 4096 B, valid length prefix, zero tail, random body; no decoy body reads as text |
+| 3 | The moment of writing is hidden (secret send) | `timing_test` + `chat_bucket_test` | drain order uniform over the batch; a room batch is `k` |
 | 4 | Fast mode works and is the default | `fast_mode_test` | latency < 1 s; fast is the default |
 | 5 | 1:1 has no sender | `schema_test` | no `sender` column |
 | 6 | The recipient cannot open a decoy | `mailbox_test` | an attempt to open a decoy errors |
@@ -283,6 +303,7 @@ With the `zifiri1` prefix it is **71** characters; one line on screen.
 | 10 | The set against A1 (once cover is live) | `cover_test` | set ≤ k; the text says "at most k" |
 | 11 | The identity line is 64 base32 | `identity_test` | 40 B → 64 characters; `mailbox_id` from HKDF |
 | 12 | The application does not read IP headers | `transport_test` | `remote_ip`/`x-forwarded-for` are not read |
+| 13 | A room publishes no decoys; the batch is `k` | `chat_bucket_test` | 3 sends → 3 stored rows, 3 distinct authors, bodies intact |
 
 ## Removed (carried over from v4)
 

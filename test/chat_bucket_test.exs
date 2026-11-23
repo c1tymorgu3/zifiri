@@ -3,14 +3,16 @@ defmodule Zifiri.ChatBucketTest do
   The room path through the bucket: `mode=secret` is a live bucket write, not a
   module test of `Zifiri.Bucket`.
 
-  C-01…C-06 describe a ten-minute bucket filled to 120 and shuffled. Until the
-  channel queues into it, those numbers only hold for the module. These tests
-  drive the real `handle_in("msg", …)` and the real publisher tick, and pin:
+  C-50 and C-51 say what the room bucket does and does not hide: the drain
+  publishes exactly the messages written in it — no decoys — so the candidate
+  author set is `k`, not 120, and what it hides is the moment of writing, not
+  what was written. These tests drive the real `handle_in("msg", …)` and the
+  real publisher tick, and pin:
 
-    * three secret messages drain to exactly 120 stored messages;
+    * three secret messages drain to exactly three stored messages;
     * the stored order is not the arrival order (seeded, so deterministic);
-    * the three real frames survive byte-for-byte and the 117 decoys are
-      1024-byte sealed envelopes;
+    * every stored frame is a real one, and the authors are exactly the senders
+      that wrote in the bucket (`k = 3`);
     * `mode=fast` (and no mode) still writes one message immediately;
     * an empty bucket publishes nothing;
     * an unknown mode is refused as `bad_mode`.
@@ -25,7 +27,6 @@ defmodule Zifiri.ChatBucketTest do
 
   @room "chat:lobby"
   @pow_bits 12
-  @target 120
   @body_bytes 1024
 
   setup do
@@ -41,7 +42,7 @@ defmodule Zifiri.ChatBucketTest do
     :ok
   end
 
-  test "three secret messages drain to exactly 120 stored messages" do
+  test "three secret messages drain to exactly three stored messages" do
     {pub, priv} = keypair()
     payloads = signed_many(priv, pub, ["bir", "iki", "üç"], "secret") |> Enum.map(&elem(&1, 0))
 
@@ -58,7 +59,8 @@ defmodule Zifiri.ChatBucketTest do
     assert :ok = publish()
 
     assert Bucket.size() == 0
-    assert length(Store.messages(@room)) == @target
+    # k = 3 and nothing else: the drain adds no filler row (C-50).
+    assert length(Store.messages(@room)) == 3
   end
 
   test "the stored order is not the arrival order" do
@@ -106,35 +108,41 @@ defmodule Zifiri.ChatBucketTest do
            "every seed preserved arrival order: #{inspect(orders)}"
   end
 
-  test "the real bodies survive and every decoy is a 1024 B sealed envelope" do
-    {pub, priv} = keypair()
-    signed = signed_many(priv, pub, ["gerçek-1", "gerçek-2", "gerçek-3"], "secret")
-    reals = Enum.map(signed, fn {_payload, padded} -> padded end)
+  test "no decoys: the batch is the three real frames and the authors are k = 3" do
+    senders =
+      for body <- ["gerçek-1", "gerçek-2", "gerçek-3"] do
+        {pub, priv} = keypair()
+        {payload, padded} = signed(priv, pub, 1, body, "secret")
 
-    for {payload, _padded} <- signed do
-      assert {:reply, %{status: "queued"}, _} = RoomChannel.handle_in("msg", payload, socket())
-    end
+        assert {:reply, %{status: "queued", mode: "secret"}, _} =
+                 RoomChannel.handle_in("msg", payload, socket())
+
+        %{body: body, padded: padded, pubkey: pub}
+      end
 
     assert :ok = publish()
 
     stored = Store.messages(@room)
     bodies = Enum.map(stored, & &1.body)
 
-    assert length(stored) == @target
+    assert length(stored) == 3
 
-    for padded <- reals do
+    # Exactly the frames that were written, once each: the stored bodies are
+    # the three written ones, so there is no filler row to count as a candidate.
+    assert Enum.sort(bodies) == Enum.sort(Enum.map(senders, & &1.padded))
+    assert Enum.uniq(bodies) == bodies
+
+    for %{padded: padded} <- senders do
       assert Enum.count(bodies, &(&1 == padded)) == 1
     end
 
-    decoys = bodies -- reals
+    # The candidate author set is the number of writers in the bucket, not 120.
+    authors = stored |> Enum.map(& &1.pubkey) |> Enum.uniq()
+    assert length(authors) == 3
+    assert Enum.sort(authors) == Enum.sort(Enum.map(senders, & &1.pubkey))
 
-    assert length(decoys) == @target - length(reals)
-    assert Enum.all?(decoys, &(byte_size(&1) == @body_bytes))
-    assert Enum.uniq(decoys) == decoys, "two decoys were byte-identical"
-
-    decoy_messages = Enum.reject(stored, &(&1.body in reals))
-    decoy_keys = Enum.map(decoy_messages, & &1.pubkey)
-    assert Enum.uniq(decoy_keys) == decoy_keys, "two decoys reused a key"
+    # And every stored frame is a real 1024 B room frame.
+    assert Enum.all?(bodies, &(byte_size(&1) == @body_bytes))
   end
 
   test "fast is the default and writes one message immediately" do

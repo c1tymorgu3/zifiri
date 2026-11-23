@@ -72,8 +72,9 @@ defmodule Zifiri.Envelope do
   Pads into one named bucket instead of the smallest that fits.
 
   Chat uses this: a room frame is always 1024 bytes, because a frame whose size
-  follows its text tells the reader how long the text was, and because a decoy
-  can only be mistaken for a real frame if both are the same size.
+  follows its text tells the reader how long the text was. The 1:1 bucket uses
+  it from the other end: `Zifiri.Mailbox.Decoy` builds its filler with it, so a
+  decoy is a real frame — length prefix, payload, zero tail — and not noise.
   """
   @spec encode(binary(), pos_integer()) :: {:ok, binary(), pos_integer()} | {:error, :too_large}
   def encode(payload, bucket) when is_binary(payload) and bucket in @buckets do

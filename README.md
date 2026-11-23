@@ -7,9 +7,9 @@
   <img alt="Elixir 1.20" src="https://img.shields.io/badge/Elixir-1.20-4B275F?style=flat-square&logo=elixir&logoColor=white">
   <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
-  <img alt="702 tests" src="https://img.shields.io/badge/tests-702%20passing-brightgreen?style=flat-square">
+  <img alt="703 tests" src="https://img.shields.io/badge/tests-703%20passing-brightgreen?style=flat-square">
   <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
-  <img alt="49 claims" src="https://img.shields.io/badge/claims-35%2F49%20green-yellow?style=flat-square">
+  <img alt="51 claims" src="https://img.shields.io/badge/claims-36%2F51%20green-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
 </p>
 
@@ -26,17 +26,25 @@ That is a claim about the database, not about the wire. On clearnet an operator 
 request time next to an address; the model starts where they do, and the section below says so
 in the same words the threat model uses.
 
-There are two ways to send, and the faster one is the default.
+Two ways to send, and the faster one is the default.
 
-**Fast** leaves immediately. The only cover is whoever else wrote in the last minute, and the
-button prints that number: with no traffic it reads 1, which is the honest answer, because the
-observer then has one candidate.
+**Fast** leaves immediately. Your cover is whoever else wrote in the last minute, and the button
+prints that number. With no traffic it reads 1, which is the honest answer: the observer then
+has one candidate.
 
-**Secret send** trades latency for a set. The message joins a ten-minute bucket, the bucket
-fills with decoys to exactly 120 entries, and the whole thing is shuffled before anyone reads
-it, so an observer has 120 candidates and no way to tell which one you wrote. Rooms and
-one-to-one mail both take this path (C-14 is the claim that mail does, and it is green because
-the write really goes through the bucket).
+**Secret send** holds the message in a ten-minute bucket, aligned to the wall clock, never
+drained early, shuffled and published once. Inside that window nobody can say when you wrote.
+What the bucket does *not* do depends on the surface:
+
+- **Rooms are public and not end-to-end encrypted.** Anyone can read the text, and in a room the
+  bucket carries no decoys, so "which of these was actually written" is not hidden. What stays
+  hidden is the moment. Your anonymity set is **k**, the number of people who wrote in that
+  bucket. If traffic is light, k is 1 and only the timing is blurred.
+- **One-to-one mail is sealed**, and its bucket is padded to 120 frames, so a listener cannot
+  pick out the real one by shape or size (C-04). A mailbox write really does go through the
+  bucket; that is C-14.
+
+120 entries in a bucket is not the same as 120 people, and this file will not pretend otherwise.
 
 Every claim below carries an ID, and every ID has a command that can refute it. If a claim
 cannot be checked, it does not belong in this file.
@@ -90,11 +98,14 @@ cannot be checked, it does not belong in this file.
 
 ## How a write travels
 
-The diagram is secret send, in the room or in mail. Fast skips the bucket entirely.
+The diagram is secret send. In a room the bucket publishes only what arrived; in mail it is
+padded to 120. Fast skips the bucket entirely.
 
 <p align="center">
-  <img src="assets/bucket.gif" alt="Three messages arrive, the bucket fills to 120, shuffles, publishes" width="100%">
+  <img src="assets/bucket.gif" alt="The 1:1 bucket: messages arrive, fill to 120 with decoys, shuffle, publish" width="100%">
 </p>
+
+<p align="center"><sub>The animation is the 1:1 bucket. The room bucket publishes only what arrived; there are no decoys to draw.</sub></p>
 
 ```
 browser                    server                      disk
@@ -133,15 +144,19 @@ finish says so. There are no tombstones and no backups: a backup is a copy you c
   does not.
 - An operator can recognise decoy traffic their own server generated. The design assumes they
   comply and minimises what compliance yields: ciphertext and a list of hashes.
+- An operator, or anyone who gets into the server while it is running, sees the bucket in RAM
+  and knows which frames they minted. The design protects history, not a live compromise.
+- Write in many buckets and the protection wears: each bucket narrows the timing, and the
+  intersection across buckets is smaller than any single one.
 - Content that describes its author defeats every design in this repository. No amount of
   padding fixes a sentence that says where you work.
 
 ## Claims
 
-Forty-nine claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
+Fifty-one claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
 status. [docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so
-they cannot drift apart. As of 2026-11-23: **35 green, 10 unproven, 1 flaky**, and 3 that say what is *not*
-claimed, which is how 49 rows add up. The file says so row by row.
+they cannot drift apart. As of 2026-11-23: **36 green, 11 unproven, 1 flaky**, and 3 that say what is *not*
+claimed, which is how 51 rows add up. The file says so row by row.
 
 The table below is not the flattering subset. It carries the three system-level claims that are
 still unproven, because those are the ones a reader should weigh before trusting the rest.
@@ -149,8 +164,8 @@ still unproven, because those are the ones a reader should weigh before trusting
 | ID | Claim | Status |
 |---|---|---|
 | C-01 | A bucket is ten minutes, target 120, aligned to the wall clock | Green |
-| C-03 | An empty bucket is filled with 120 decoys | Green |
-| C-04 | A decoy is indistinguishable from a real envelope: 4096 B, same header and padding | Green |
+| C-03 | A 1:1 bucket is filled to 120 with decoys (mail only; rooms publish no decoys) | Green |
+| C-04 | A 1:1 decoy is the same frame as a real envelope: 4096 B, valid length prefix, zero tail, random body | Green |
 | C-08 | The one-to-one table has no sender, conversation or account column | Green |
 | C-18 | Erase: `secure_delete`, WAL truncate, `VACUUM`; the body is in neither file | Green |
 | C-20 | No body-bearing log: one redacted `Logger.error` in the sweeper, Ecto logging off, no `IO.inspect` | Green |
@@ -162,12 +177,14 @@ still unproven, because those are the ones a reader should weigh before trusting
 | C-21 | Deployment logs: proxy `access_log off`, container logging off, no core dumps, no swap | **Unproven**: configuration written, never drill-tested |
 | C-36 | On onion the server cannot see the client address | **Unproven**: the onion drill has not been run on a live host |
 | C-47 | `mailbox_id` is derived from the seed by HKDF | Green |
+| C-50 | A plaintext room publishes no decoys; a secret-room batch holds exactly what was written, so the set is k | Green |
+| C-51 | Room content is not confidential: secret mode hides the moment, not the text | Green |
 
 ### Check one yourself
 
 ```bash
-make check                      # 383 backend tests, 0 failures
-make client                     # 297 client tests, then the bundle size check
+make check                      # 403 backend tests, 0 failures
+make client                     # 300 client tests, then the bundle size check
 bash scripts/publish-gate.sh    # no secret, no placeholder, no TODO in the tree
 bash scripts/e2e/run.sh         # a real Chrome posts, reads and deletes against a live server
 ```
@@ -179,11 +196,12 @@ the point of writing them this way.
 
 Three decisions that shaped everything else, each with the alternative we threw away.
 
-**Buckets of 120, not a k-anonymity pool.** The first design collected five writers and
+**A bucket of time, not a pool of people.** The first design collected five writers and
 published them together. It was a counter, not a set: five is not an anonymity set, and the
-product sat locked until the fifth stranger arrived. A ten-minute bucket filled with decoys
-gives 120 candidates whether one person posts or twenty. 120 is where the set is worth
-something: 1 − 1/120 is 99.2%, which is arithmetic, not a measurement.
+product sat locked until the fifth stranger arrived. The bucket replaced it with a boundary
+everyone shares and fixed the one thing it could actually fix, the moment of writing. It never
+invented writers who were not there. In a room the set is k, however small; in mail the batch
+is padded to 120 so its size says nothing about how much real mail it holds.
 
 **SQLite, not Postgres.** Postgres writes faster and replicates, and it keeps deleted tuples
 until vacuum, keeps a WAL you archive, and keeps `pg_log` on by default. Every one of those is a
@@ -191,10 +209,12 @@ place where the row you deleted still exists. The write profile here is bursty b
 bucket collects for ten minutes and publishes once, so the single-writer limit never binds. p95 is
 50 ms at 200 concurrent writers.
 
-**`secure_delete` and a WAL truncate, not `VACUUM`.** Vacuum rewrites the whole file, which
-means it stalls every writer for as long as it runs, and it cannot be the thing a two-click
-delete depends on. Zeroing freed pages and truncating the WAL happens in milliseconds and holds
-under load. Vacuum still runs at night; it is maintenance, not the guarantee.
+**Zeroing and a rebuild, not a flag.** A delete that only marks a row as gone is a promise, not
+an erasure: the bytes stay in the file and in the log. So an erase runs a checkpoint, then
+`VACUUM`, then a second checkpoint, and `secure_delete` zeroes the cell before any of it. Vacuum
+is on the path precisely because the file must stop carrying the size of what was removed, and
+it is why an erase can wait: fifty listings measured 8 to 12 ms, and under load it retries
+three times before a sweeper takes over.
 
 ## Compared to
 
@@ -283,9 +303,9 @@ Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripp
 <summary><b>Repository map</b></summary>
 
 ```
-lib/zifiri/      33 modules, 6.2k lines
-test/            383 tests, 7.3k lines against 6.2k of source
-client/          vanilla TypeScript, no framework, 297 tests
+lib/zifiri/      6.7k lines of source
+test/            403 tests, 7.9k lines against 6.7k of source
+client/          vanilla TypeScript, no framework, 300 tests
 infra/           nginx, Dockerfile, compose, onion, systemd units, harden.sh
 scripts/         drills, measurements, e2e, publish gate
 docs/            spec, claims, verify, measurements, decisions

@@ -89,27 +89,34 @@ copying, read `\|` as `|`; inside fenced blocks there is no escaping.
 
 ---
 
-## Claim index — one heading per claim (C-01 … C-49)
+## Claim index — one heading per claim (C-01 … C-51)
 
 The IDs are the ones in `docs/claims.md`; this index is the join between a claim and the
 command that can refute it. Counts marked *today* were measured on **2026-11-23** with
 `mix test <file>` on this checkout; where a row has no test the plan is the only source
 and the claim is unproven.
 
-### C-01 — A bucket is ten minutes, target 120, aligned to the wall clock
-`mix test test/bucket_test.exs` → `14 passed` (today).
+### C-01 — A bucket is ten minutes, target 120 (1:1), aligned to the wall clock
+`mix test test/bucket_test.exs` → `14 passed` (today); the room side:
+`mix test test/chat_bucket_test.exs` → `6 passed` — 3 sends drain as one batch of 3.
 
 ### C-02 — The bucket drains on the clock, not on a count; the drain is shuffled
-`mix test test/bucket_test.exs` → `14 passed` (today).
+`mix test test/bucket_test.exs` → `14 passed` (today); stored order on the room path:
+`mix test test/chat_bucket_test.exs` → `6 passed`.
 
-### C-03 — An empty bucket is filled with decoys; `fill(n)` = `n − real`
-`mix test test/decoy_test.exs` → `15 passed` (today).
+### C-03 — **1:1 only:** a non-empty bucket is completed to 120; `fill(n)` = `n − real`
+`mix test test/mailbox_bucket_test.exs` → `11 passed` (today: 3 real → 120 rows).
+`mix test test/decoy_test.exs` → `15 passed` (the filler arithmetic and the key).
+An empty bucket publishes nothing on either plane; a room batch is never filled (C-50).
 
-### C-04 — A decoy envelope is indistinguishable from a real one
+### C-04 — **1:1 only:** a decoy is the same frame as a real envelope (4096 B, length prefix, zero tail, random body)
 `mix test test/decoy_shape_test.exs` → `6 passed` (today).
+`mix test test/mailbox_bucket_test.exs` → `11 passed` — every stored decoy decodes
+`{:ok, _, 4096}`. Rooms publish no decoys, so there is no chat-frame version of this claim.
 
-### C-05 — The moment of writing is hidden; the position inside the bucket is uniform
-`mix test test/timing_test.exs` → `3 passed` (today).
+### C-05 — The moment of writing is hidden; the position inside the batch is uniform
+`mix test test/timing_test.exs` → `3 passed` (today; synthetic 120-entry bucket).
+`mix test test/chat_bucket_test.exs` → `6 passed` — the room path holds a message until the drain.
 
 ### C-06 — The decoy key is per bucket, in RAM, never on disk
 `mix test test/decoy_test.exs` → `15 passed` (today).
@@ -136,7 +143,8 @@ No test yet (`fast_mode_test`); the claim is unproven.
 No test; AEAD is not exercised against a decoy.
 
 ### C-14 — 1:1 envelopes join the bucket and are completed to 120
-**unproven: no command yet.** No test; envelopes are written directly today.
+`mix test test/mailbox_bucket_test.exs` → `11 passed` (today: 3 real + 117 decoys = 120
+rows in one transaction). This is the 1:1 plane only; a room batch is never filled (C-50).
 
 ### C-15 — Listings: plaintext metadata, non-unique `owner_hash`, day precision
 `mix test test/listings_test.exs` → `33 passed` (today).
@@ -245,6 +253,28 @@ Text audit of the v1 copy.
 
 ### C-49 — The v2 word list is 27 words
 `identity_test` v2 group, not written.
+
+### C-50 — A plaintext room publishes no decoys; the batch is `k`, not 120
+`mix test test/chat_bucket_test.exs` → `6 passed` (today: 3 sends → 3 stored rows, 3
+distinct pubkeys, bodies byte-identical). The endpoint: `mix test test/api_surface_test.exs`
+→ `22 passed` (one secret send → one page entry). The proof is a count, not a shape:
+there is no filler row left to be a candidate author.
+
+### C-51 — Room content is not confidential: secret mode hides the moment, not the text
+Text audit, the same kind as C-37/C-45 (there is no unit test for a sentence):
+
+```bash
+grep -c 'hides the moment of writing' docs/spec.md   # today: 1
+grep -ni '120 candidates' docs/spec.md README.md
+# today: README.md:37 — "so an observer has 120 candidates and no way to tell
+# which one you wrote." and README.md:185 — "gives 120 candidates whether one
+# person posts or twenty". Both are the room paragraph and both are false for a
+# room; they are being rewritten. C-51 stays None until this grep is empty.
+```
+
+Status **None** in `docs/claims.md`: the spec side is written, the README side is not,
+and the audit is the row's evidence. The client copy (`client/src/ui/mode.ts`,
+`rooms.ts`) carries the same 120 and is the other half of the same fix.
 
 ---
 

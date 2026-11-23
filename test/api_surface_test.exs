@@ -278,7 +278,7 @@ defmodule Zifiri.ApiSurfaceTest do
     assert after_ref["messages"] == []
   end
 
-  test "secret mode queues the frame and the bucket publishes 120 entries" do
+  test "secret mode queues the frame and the bucket publishes exactly what was written" do
     {body, payload} = room_message("sessiz mesaj", 7)
     body = Map.put(body, "mode", "secret")
 
@@ -291,10 +291,11 @@ defmodule Zifiri.ApiSurfaceTest do
 
     assert :ok = publish()
 
-    # One answer is a fixed 16 KiB page, so a 120-entry bucket is read in pages.
+    # One drain is one closed batch: the room carries exactly the frame that was
+    # written in it — no decoys, so the candidate author set is k = 1 (C-50).
     {ids, bodies} = read_room_pages(0, {[], []})
-    assert length(ids) == 120
-    assert payload in bodies
+    assert length(ids) == 1
+    assert bodies == [payload]
   end
 
   defp read_room_pages(since, {ids, bodies}, tries \\ 200) do

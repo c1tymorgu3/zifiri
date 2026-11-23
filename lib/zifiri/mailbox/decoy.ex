@@ -7,13 +7,23 @@ defmodule Zifiri.Mailbox.Decoy do
   shape as a real row, byte for byte:
 
     * `mailbox_id` is 16 fresh random bytes — a label nobody holds a key for;
-    * `envelope` is exactly `Zifiri.Mailbox.envelope_bytes/0` random bytes, so
-      AEAD opening fails for every recipient (there is no key to try);
+    * `envelope` is a real frame: `Zifiri.Envelope.encode/2` over a random
+      payload, so it is exactly `Zifiri.Mailbox.envelope_bytes/0` bytes with a
+      valid 32-bit length prefix, the payload, and a zero tail. Raw noise would
+      not be an envelope at all — `Envelope.decode/1` would answer
+      `:bad_length` on most of it — and the prefix is the first thing a
+      classifier would look at. Here `decode/1` answers `{:ok, payload, 4096}`
+      for a decoy exactly as it does for a real frame;
     * `ttl` is the same lifetime the real envelopes in the batch carry.
 
+  The payload is random and its length varies the way a real message's does
+  (1 … bucket − 4), so neither the body nor the visible length prefix separates
+  the two. AEAD opening still fails for every recipient: the ciphertext under
+  the payload was never sealed to a key anyone holds.
+
   There is no marker, no flag and no column that says "decoy": the table stores
-  the same five columns for both, and `mix test` checks that this module's
-  output is the same size as a real envelope.
+  the same five columns for both. This is 1:1 cover only — a plaintext room
+  publishes no decoys (`docs/claims.md` C-50).
 
   `:rand` is injectable (`(byte_count) -> binary`) so a test can seed it; the
   production default is `:crypto.strong_rand_bytes/1`.
@@ -23,7 +33,7 @@ defmodule Zifiri.Mailbox.Decoy do
 
   @id_bytes 16
 
-  @typedoc "A random mailbox id, a full-size random envelope, and a lifetime."
+  @typedoc "A random mailbox id, a full-size sealed envelope, and a lifetime."
   @type t :: %{
           mailbox_id: <<_::128>>,
           envelope: binary(),
@@ -44,9 +54,22 @@ defmodule Zifiri.Mailbox.Decoy do
 
     %{
       mailbox_id: random_id(rand),
-      envelope: rand.(Mailbox.envelope_bytes()),
+      envelope: random_envelope(rand),
       ttl: Keyword.get(opts, :ttl_ms, Mailbox.ttl_ms())
     }
+  end
+
+  # The envelope is the same frame a real row carries — 32-bit length, payload,
+  # zero tail — built by the encoder the server uses, never by hand. A payload
+  # of 1..bucket-4 bytes matches the spread of real messages, and the two bytes
+  # used to pick it come from the same `:rand` seam so a seeded test stays
+  # deterministic.
+  defp random_envelope(rand) do
+    bucket = Mailbox.envelope_bytes()
+    payload_bytes = rem(:binary.decode_unsigned(rand.(2)), bucket - 4) + 1
+    {:ok, envelope, ^bucket} = Zifiri.Envelope.encode(rand.(payload_bytes), bucket)
+
+    envelope
   end
 
   # The all-zero id is refused by `Mailbox.decode_id/1`, so a decoy must never

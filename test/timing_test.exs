@@ -1,7 +1,13 @@
 defmodule Zifiri.TimingTest do
   @moduledoc """
-  `docs/spec.md` §Two modes, silent mode: when a bucket closes, 120 bodies come out
-  **at once**, and their order must not say which one is the real message.
+  `docs/spec.md` §Two modes, silent mode: the drain shuffles the batch, and the
+  order must not say which one is the real message.
+
+  This measures the shuffle itself, on a synthetic 120-entry bucket filled by
+  hand (1 real + 119 `Zifiri.Chat.Decoy` frames). The room path publishes no
+  decoys and its batch is `k`, the number of writers (`docs/claims.md` C-50);
+  nothing here claims the room produces a 120-entry batch — what is measured is
+  the drain's order, given n entries.
 
   Two things are measured:
 

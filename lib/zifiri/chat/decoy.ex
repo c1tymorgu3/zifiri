@@ -2,6 +2,13 @@ defmodule Zifiri.Chat.Decoy do
   @moduledoc """
   Cover traffic that is a frame like any other (`docs/spec.md` §"The number: bucket size").
 
+  > **Not used by the room path any more.** A plaintext room publishes exactly
+  > the messages written in it and no decoys at all
+  > (`Zifiri.Chat.BucketHandler`, `docs/claims.md` C-50): an observer can read
+  > the batch, so extra rows buy no cover, and the candidate author set is `k`,
+  > not 120. Nothing in `lib/` calls this module; the tests keep it as the
+  > frame-shape work it is, not as a description of what a drain emits.
+
   ## What a decoy is
 
   A decoy is a full 4 KB frame: an opaque, encrypted envelope, a signature, a

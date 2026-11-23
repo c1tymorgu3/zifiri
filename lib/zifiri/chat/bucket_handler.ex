@@ -6,52 +6,35 @@ defmodule Zifiri.Chat.BucketHandler do
   verifies the frame and queues `{:chat, room, message}` in `Zifiri.Bucket`;
   when the ten-minute bucket closes, the publisher hands the type's items here.
 
-  The batch is completed the way `docs/spec.md` §"The number: bucket size"
-  describes: `n` real messages plus `120 - n` decoys from `Zifiri.Chat.Decoy`,
-  all shuffled together, then submitted through the same `Store.submit/2` a
-  fast message uses. After the drain the store cannot say which row arrived
-  from a socket and which was minted at close time — the decoys carry the same
-  frame shape, an Ed25519 signature under their own ephemeral key and an
-  AES-256-GCM sealed 4096-byte envelope (`Zifiri.Chat.Decoy.fill/2` builds
-  them; nothing here invents a body).
+  The batch is exactly the messages written in the bucket, shuffled — no decoys
+  are appended. A room is plaintext, so an observer reads every line whatever
+  the batch size is; padding the batch to 120 would invent 120 candidate authors
+  where `k` writers exist and would make the k-candidate claim false
+  (`docs/claims.md` C-50). What the bucket hides on this plane is *when* a line
+  was written: the whole batch is one drain at one clock instant, and the
+  shuffle decides which position each writer's frame lands in. It hides nothing
+  about what was written (C-51).
 
   The shuffle permutes senders, not a sender's own stream — the store reads a
   lower counter from a known key as a replay, so one member's frames keep their
   counter order inside the batch (`shuffled_in_replay_order/1`).
 
-  A batch larger than the target is not padded and not truncated; an empty
-  bucket never reaches this module because the publisher only dispatches a
-  non-empty type group.
+  A batch larger than the target is not truncated; an empty bucket never reaches
+  this module because the publisher only dispatches a non-empty type group.
   """
 
   @behaviour Zifiri.Bucket.Publisher.Handler
 
-  alias Zifiri.Bucket
-  alias Zifiri.Chat.Decoy
   alias Zifiri.Chat.Store
 
   @impl true
   def handle_batch([], _ctx), do: :ok
 
-  def handle_batch(items, ctx) do
+  def handle_batch(items, _ctx) do
     room = items |> hd() |> elem(1)
-    real = Enum.map(items, fn {:chat, _room, message} -> message end)
-    at = ctx.now
 
-    # The decoys are signed against the epoch the real frames were signed
-    # against, so the batch verifies as one batch. `real:` is explicit: the
-    # bucket has already been drained, so `Decoy.fill/2`'s `Bucket.size/0`
-    # default would read zero and pad a batch that is not empty.
-    decoys =
-      Decoy.fill(Bucket.target(),
-        real: length(real),
-        room: room,
-        epoch: Store.epoch(room),
-        at: at
-      )
-      |> Enum.map(&frame_to_message/1)
-
-    (real ++ decoys)
+    items
+    |> Enum.map(fn {:chat, _room, message} -> message end)
     |> shuffled_in_replay_order()
     |> Enum.each(fn message -> Store.submit(room, message) end)
 
@@ -61,9 +44,7 @@ defmodule Zifiri.Chat.BucketHandler do
   # The store treats a lower counter from a known key as a replay, so arrival
   # order within one sender is part of the contract. Shuffling the batch must
   # therefore permute senders, not a sender's own stream: a member who queued
-  # ctr 1, 2, 3 in one bucket still lands 1, 2, 3. Decoys each carry a fresh
-  # key, so they are unaffected; the interspersed positions are what makes the
-  # stored order differ from the queue order.
+  # ctr 1, 2, 3 in one bucket still lands 1, 2, 3.
   defp shuffled_in_replay_order(messages) do
     shuffled = Enum.shuffle(messages)
 
@@ -79,19 +60,5 @@ defmodule Zifiri.Chat.BucketHandler do
       end)
 
     ordered
-  end
-
-  # A decoy entering the store looks like a message entering the store: the
-  # sealed envelope is the body, its size is the bucket, and the counter is a
-  # constant — every decoy brings its own public key, so no two share a replay
-  # stream and the value is never compared against a real sender's.
-  defp frame_to_message(frame) do
-    %{
-      pubkey: frame.pubkey,
-      sig: frame.sig,
-      ctr: 0,
-      padded: frame.envelope,
-      bucket: byte_size(frame.envelope)
-    }
   end
 end

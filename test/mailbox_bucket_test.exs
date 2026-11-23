@@ -20,6 +20,9 @@ defmodule Zifiri.MailboxBucketTest do
 
     * three real envelopes + one drain -> 120 rows, all 4096 bytes;
     * the three real tags survive; every other tag is a fresh 16 random bytes;
+    * every decoy is a decodable frame (`Envelope.decode/1` answers
+      `{:ok, payload, 4096}`) with a random, variable-length body — the same
+      frame a real row carries, never raw noise (C-04);
     * an empty bucket writes nothing (no 120-decoy phantom batch);
     * `fetch/3` sees only the tag it asked for, never a decoy;
     * every row, decoy included, carries the same 72 h lifetime.
@@ -107,6 +110,47 @@ defmodule Zifiri.MailboxBucketTest do
     assert length(decoy_envelopes) == @target - 3
     assert Enum.uniq(decoy_envelopes) == decoy_envelopes, "two decoys were byte-identical"
     refute Enum.any?(decoy_envelopes, &(&1 in real_envelopes))
+  end
+
+  test "every decoy envelope is a real frame with a random, variable body" do
+    start = now()
+    reals = queue_reals(3, start)
+    real_tags = Enum.map(reals, &elem(&1, 1))
+
+    assert :ok = publish(start)
+
+    decoys =
+      Repo.all(
+        from e in Envelope,
+          where: e.mailbox_id not in ^real_tags,
+          select: e.envelope
+      )
+
+    assert length(decoys) == @target - 3
+
+    payloads =
+      for envelope <- decoys do
+        assert byte_size(envelope) == Mailbox.envelope_bytes()
+        # The frame a real row carries: a valid 32-bit length prefix, a body, a
+        # zero tail. `decode/1` is the reader both classes meet, and it answers
+        # the same thing for both.
+        assert {:ok, payload, 4096} = Zifiri.Envelope.decode(envelope)
+        payload
+      end
+
+    ratios = Enum.map(payloads, &printable_ratio/1)
+    mean = Enum.sum(ratios) / length(ratios)
+
+    # Random bytes are ~37% printable ASCII; text is ~100%. A decoy that
+    # carried a sentence would drag this mean up — that is the tell C-04
+    # forbids.
+    assert mean < 0.5, "decoy bodies average #{Float.round(mean, 2)} printable"
+
+    # Variable length, like a real message: a fixed payload length would put
+    # the same four bytes at the head of every decoy.
+    lengths = payloads |> Enum.map(&byte_size/1) |> Enum.uniq()
+    assert length(lengths) > 20
+    assert Enum.all?(payloads, &(byte_size(&1) in 1..(Mailbox.envelope_bytes() - 4)))
   end
 
   test "an empty bucket publishes nothing — no phantom 120-decoy batch" do
@@ -206,9 +250,20 @@ defmodule Zifiri.MailboxBucketTest do
     assert decoy.ttl == @ttl_ms
     refute decoy.mailbox_id == <<0::128>>
     assert {:ok, _} = Mailbox.decode_id(decoy.mailbox_id)
+    assert {:ok, payload, 4096} = Zifiri.Envelope.decode(decoy.envelope)
+    assert byte_size(payload) in 1..(Mailbox.envelope_bytes() - 4)
   end
 
   # -- helpers ----------------------------------------------------------------
+
+  # Share of bytes that are printable ASCII. Random bytes land near 0.37; a
+  # body of text lands near 1.0. Used instead of a UTF-8 check so a short
+  # payload of legitimate random bytes cannot fail the test by accident.
+  defp printable_ratio(payload) do
+    n = byte_size(payload)
+    printable = payload |> :binary.bin_to_list() |> Enum.count(&(&1 in 0x20..0x7E))
+    if n == 0, do: 0.0, else: printable / n
+  end
 
   defp queue_reals(n, start) do
     for byte <- 1..n do
