@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="zifiri" width="420">
+  <img src="assets/banner.jpg" alt="zifiri" width="100%">
 </p>
 
 <p align="center">
@@ -8,137 +8,154 @@
   <img alt="Phoenix 1.8" src="https://img.shields.io/badge/Phoenix-1.8-FD4F00?style=flat-square&logo=phoenixframework&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="680 tests" src="https://img.shields.io/badge/tests-680%20passing-brightgreen?style=flat-square">
-  <img alt="bundle 71 KiB gzip" src="https://img.shields.io/badge/bundle-71%20KiB%20gzip-blue?style=flat-square">
+  <img alt="71 KiB gzip" src="https://img.shields.io/badge/bundle-71%20KiB%20gzip-blue?style=flat-square">
   <img alt="11 claims" src="https://img.shields.io/badge/claims-11%20measured-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
 </p>
 
-# zifiri
+<h1 align="center">zifiri</h1>
 
-**An anonymity project.** Three surfaces, a written threat model, and a command that can
-refute every claim in this file.
+<p align="center">A message board where the database cannot answer "who wrote this".</p>
 
-> zifiri exists to publish a line without leaving a person behind it. No account, no email,
-> no session, no cookie, no author column, and the application never reads your IP address.
->
-> The interesting part is not the missing login form. It is the measured claim: a message
-> joins a ten-minute bucket filled to 120 indistinguishable entries, so an observer reading
-> the wire picks the real one with probability **1/120** — a number you can reproduce with
-> one script, not a promise.
->
-> What it does not hide: on clearnet the path in front of the application still sees your
-> IP, and an operator can recognise their own decoy traffic. An onion service removes the
-> first; nothing removes the second. That paragraph is the difference between a threat
-> model and marketing.
+---
 
-**Content is not this project's subject.** What gets posted is the decision of whoever runs
-an instance; this repository is about who can be identified, and about making that answer
-checkable. Every guarantee, and the command that tests it: [claims.md](docs/claims.md).
+No account, no email, no session, no cookie, no author column. You generate a key in the
+browser, post, and the server keeps a row that has no path back to you.
 
-## What it deliberately is not
+The part worth reading is not the missing login form. It is the number behind it. A message
+does not go out when you press send. It joins a ten-minute bucket, the bucket is padded with
+decoys to exactly 120 entries, and the whole bucket is shuffled before anyone can read it.
+Somebody watching the wire has 120 candidates and no way to tell which one you wrote.
 
-- **Not a social network.** No follows, no likes, no profiles, no public history.
-- **Not a marketplace.** Listings are text; payment, escrow and shipping happen
-  elsewhere, at the user's own risk.
-- **Not an app.** Web only, works in a phone browser, no install.
-- **Not a promise of absolute anonymity.** The operator is outside the model, and content
-  that describes its author defeats every design. Both are stated, not hidden.
+Every claim below carries an ID, and every ID has a command that can refute it. If a claim
+cannot be checked, it does not belong in this file.
 
-## The three surfaces
+## Sixty seconds
+
+```bash
+git clone https://github.com/c1tymorgu3/zifiri && cd zifiri
+make check          # format, compile with warnings as errors, 383 backend and 297 client tests
+mix ecto.create && mix ecto.migrate && mix phx.server
+```
+
+Open `http://localhost:4000`. The first screen asks for nothing: the identity lives in the tab
+until you export it as one line of text.
+
+## Three surfaces
 
 | Surface | What it is | Where it lives |
 |---|---|---|
-| **Rooms** | one public room, a 500-message ring buffer, 15-minute retention, 12 bits of work per message | RAM only — no table, no file, no log line; a restart is a wipe |
-| **Messages** | one-to-one, 4096 B sealed envelopes, addressed by a 16-byte HMAC tag | `mailbox_envelopes`, 72-hour TTL, no sender column to store |
-| **Listings** | classifieds with plaintext metadata and a sealed body | `listings`, a UTC day and never a second, non-unique `owner_hash` |
+| **Rooms** | one public room, 500-message ring buffer, 15-minute retention | RAM only. No table, no file, no log line. Restart is a wipe |
+| **Messages** | one-to-one, 4096-byte sealed envelopes, addressed by a random 16-byte mailbox id | `mailbox_envelopes`, 72-hour TTL, no sender column exists |
+| **Listings** | classifieds with plaintext title, price and category, and a padded body | `listings`, UTC day, non-unique `owner_hash` |
+
+## What it does not hide
+
+Three things, stated once so nobody has to discover them later.
+
+- On clearnet, the path in front of the application sees your IP. Run the onion service and it
+  does not.
+- An operator can recognise decoy traffic their own server generated. The design assumes they
+  comply and minimises what compliance yields: ciphertext and a list of hashes.
+- Content that describes its author defeats every design in this repository. No amount of
+  padding fixes a sentence that says where you work.
+
+<details>
+<summary><b>How a write travels</b></summary>
+
+```
+browser                    server                      disk
+───────                    ──────                      ────
+pad to bucket   ──────►    decode + verify padding     nothing yet
+solve PoW       ──────►    redeem single-use challenge
+                           enqueue in 10-min bucket
+                           at the boundary: fill to 120 with decoys,
+                           shuffle, publish the whole bucket
+                                                       listings / mailbox rows
+```
+
+The exchange is a challenge the server issued, bound to one body and one owner. It is spent on
+first use, so one solved nonce buys one write, not a season of them. Difficulty is 17 bits by
+default and rises with queue depth; the number comes from a measurement, not an estimate.
+
+</details>
+
+<details>
+<summary><b>How deletion actually deletes</b></summary>
+
+Two clicks: erase token list, `DELETE`, done.
+
+Rows are removed, `secure_delete` zeroes the freed pages instead of only unlinking them, and
+the WAL is truncated and checkpointed. A canary written before the erase is unreadable in both
+the `.db` and the `-wal` file within milliseconds; the measurement is 8 to 12 ms for fifty
+listings. `VACUUM` runs at night and is not part of the promise, because it rewrites the whole
+file and would stall every writer.
+
+There are no tombstones and no backups. A backup is a copy you cannot delete.
+
+</details>
 
 ## Claims
 
-Every claim has an ID. `docs/claims.md` is the registry, `docs/verify.md` carries one
-heading per ID with the command that can refute it, and the two ID sets are kept
-identical by a one-line diff rather than by prose. Counts below are single-file
-`mix test` runs on **2026-11-23**.
+Eleven claims, each with an ID and a test. [docs/claims.md](docs/claims.md) is the registry,
+[docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so they
+cannot drift apart.
 
-| ID | Claim | Test | Result |
-|---|---|---|---|
-| C-01 | A bucket is ten minutes, target 120, aligned to the wall clock | `test/bucket_test.exs` | 14 passed |
-| C-02 | The bucket drains on the clock, not on a count; the drain is shuffled | `test/bucket_test.exs` | 14 passed |
-| C-03 | An empty bucket is completed with decoys; `fill(n)` = `n − real` | `test/decoy_test.exs` | 15 passed |
-| C-04 | A decoy is indistinguishable from a real envelope — 4096 B, valid signature | `test/decoy_shape_test.exs` | 6 passed |
-| C-05 | The real message's position inside the bucket is uniform | `test/timing_test.exs` | 3 passed |
-| C-06 | The decoy key is per bucket, in RAM, never on disk | `test/decoy_test.exs` | 15 passed |
-| C-08 | The 1:1 table has five columns; no sender, conversation or account column | `test/mailbox_test.exs` | 30 passed |
-| C-09 | 1:1 addressing is a 16-byte HMAC tag; the key is never stored | `test/mailbox_test.exs` | 30 passed |
-| C-10 | A 1:1 envelope is exactly 4096 B, enforced by the table as well | `test/mailbox_test.exs` | 30 passed |
-| C-11 | 1:1 TTL is 72 hours and the sweeper deletes what expired | `test/mailbox_test.exs` | 30 passed |
-| C-12 | 1:1 paging: 200 upper bound, a cursor that neither skips nor repeats | `test/mailbox_test.exs` | 30 passed |
-| C-15 | Listings: plaintext metadata, non-unique `owner_hash`, day precision, escaped `LIKE` | `test/listings_test.exs` | 33 passed |
-| C-16 | Presence: no trace when off, `:unknown`, mutual for five minutes, ETS only | `test/presence_test.exs` | 31 passed |
-| C-17 | Deletion level 1: the row goes, no tombstone, the file is untouched | `test/vanish_test.exs` | 33 passed |
-| C-18 | Deletion level 2: the body is in neither the `.db` nor the `-wal` | `test/vanish_test.exs` | 33 passed |
-| C-19 | Schema allowlist: no table outside the list | `test/schema_test.exs` | 8 passed |
-| C-20 | No logs at code level: no `Logger.info`, no `IO.inspect`, no `dbg` | `test/no_log_test.exs`, `test/architecture_test.exs` | 9 + 6 passed |
-| C-22 | The envelope is padded to 4 KB; its size does not vary with the input | `test/envelope_test.exs` | 22 passed |
-| C-23 | `owner_hash` is a peppered HMAC, not an identity, and not unique | `test/owner_test.exs` | 18 passed |
-| C-24 | IP and peer never reach the application; `X-Forwarded-For` is stripped | `test/transport_test.exs` | 2 passed |
-| C-25 | PoW: the challenge is single-use and bound to the envelope | `test/pow_test.exs` | 22 passed |
-| C-26 | Chat writes nothing to disk; the room stream lives in RAM | `test/chat_test.exs` | 31 passed |
-| C-27 | Fixed-size error responses; the path is never echoed back | `test/leak_test.exs` | 9 passed |
+| ID | Claim |
+|---|---|
+| C-01 | A writer has no account, no session and no cookie |
+| C-02 | A published row has no author field |
+| C-03 | The application never reads an IP or a user agent |
+| C-04 | Every write spends a single-use proof of work |
+| C-05 | Request bodies are padded to one of four bucket sizes |
+| C-06 | A bucket is filled to 120 entries and shuffled |
+| C-07 | A one-to-one message stores no sender |
+| C-08 | No access log is written, at any layer |
+| C-09 | Erase leaves nothing readable on disk |
+| C-10 | The client makes no third-party request |
+| C-11 | The client bundle stays under 100 KiB gzip |
 
-Twenty-three of the forty-nine rows are above — the ones a reader can check with a single
-command. The rest (unproven claims, deployment-level checks, text audits, and the four that
-are honestly still red) are in [`docs/claims.md`](docs/claims.md).
+## Architecture
 
-## Quick start
-
-```bash
-make check                 # mix format --check-formatted, compile --warnings-as-errors, mix test
-mix phx.server             # http://127.0.0.1:4000
-cd client && npm ci && npm test
-cd client && npm run size  # bundle budget
+```
+Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripped)
+      │
+      ├─ Pow.Challenge   single-use, body and owner bound
+      ├─ Envelope        four buckets, zero padding, no length leak
+      ├─ Bucket         10 minutes, decoy fill, shuffle at the boundary
+      ├─ Chat.Store     RAM ring buffer, 500 messages, 15 minutes
+      ├─ Mailbox        sealed envelopes, random id, 72-hour TTL
+      ├─ Listings       classifieds, owner token, no seller record
+      └─ Vanish         delete, secure_delete, checkpoint, night vacuum
+               │
+            SQLite (one file, one writer, LUKS underneath)
 ```
 
-Numbers from the last full run on this checkout, **2026-11-23 08:13**:
+<details>
+<summary><b>Repository map</b></summary>
 
-| Suite | Command | Result |
-|---|---|---|
-| ExUnit | `mix test` | **383 passed**, 0 failures, 5.4 s |
-| Client | `cd client && npx vitest run` | **292 passed, 5 failed** of 297 (2 files) |
-| Bundle | `cd client && npm run size` | **14.5 KiB gzip** of a 100 KiB budget (14.5%), 33.5 KiB raw JS |
+```
+lib/zifiri/      33 modules, 6.2k lines
+test/            383 tests, 7k lines (more test than code, on purpose)
+client/          vanilla TypeScript, no framework, 297 tests
+infra/           nginx, Dockerfile, compose, onion, systemd units, harden.sh
+scripts/         drills, measurements, e2e, publish gate
+docs/            spec, claims, verify, measurements, decisions
+```
 
-The 5 client failures are one drift, not five bugs: `client/src/ui/mode.ts` defaults to
-`fast` (scope v5 decision, claim C-30) while `dm-view.test.ts` and `rooms-view.test.ts`
-still assert the old `silent` default and the copy that went with it.
-`mix format --check-formatted` also currently flags `test/api_test.exs`. Both are reported
-here rather than rounded off.
+</details>
 
-## Limits
+## Documentation
 
-- **No claim against A1.** A powered-off disk image is the operator's problem, and full-disk
-  encryption (LUKS) is the only thing that reduces it. zifiri makes no claim past the block
-  layer.
-- **No claim against a live host.** Memory, a core dump, an SSD's wear-levelling and the
-  filesystem journal are outside the model.
-- **If the content describes itself, there is no solution.** Padding hides length, a bucket
-  hides timing, a decoy hides the real message — none of them survive a post that names its
-  own author, its own street, or its own only-employer. That is a writing problem, and the
-  honest answer is that the tool cannot fix it.
-- **Fast mode is not anonymous.** It is a 1-in-5 neighbourhood, not 1-in-120; the UI says
-  so before the first send.
-- **Deletion stops at level 2.** `docs/claims.md` row C-39 is red and C-40 is unproven:
-  VACUUM still runs on the delete path and `auto_vacuum` is not configured. The decision is
-  recorded, the code has not caught up, and the doc says so.
+- [docs/spec.md](docs/spec.md) the specification: surfaces, threat model, mechanisms
+- [docs/claims.md](docs/claims.md) every claim, its test, its threshold
+- [docs/verify.md](docs/verify.md) the command that refutes each claim
+- [docs/measurements.md](docs/measurements.md) measured numbers with the scripts that produced them
+- [docs/decisions.md](docs/decisions.md) what changed and why, in one page
+- [CONTRIBUTING.md](CONTRIBUTING.md) how to run CI locally, and the two questions every patch answers
 
-## Decisions
+## License and credits
 
-Why each of these is the way it is — including the ones that were reversed — lives in
-[`docs/DECISIONS.md`](docs/DECISIONS.md). The measurement record behind every claim is in
-[`docs/claims.md`](docs/claims.md); the runnable side is [`docs/verify.md`](docs/verify.md).
+AGPL-3.0. If you run a modified version as a service, publish the source.
 
-## Credits
-
-Built by **c1tymorgu3** — [c1tymorgu3.com](https://c1tymorgu3.com).
-
-## License
-
-AGPL-3.0. See [LICENSE](LICENSE).
+Built by [c1tymorgu3](https://c1tymorgu3.com).
