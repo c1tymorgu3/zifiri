@@ -89,3 +89,8 @@ the DOM. Tab order follows reading order. No keyboard trap in the composer.
 Turkish, second person, no exclamation marks. Verbs first: "İlan ver",
 "Mesaj gönder", "Yok ol". Error copy states the cause in one clause and the
 next action in another. Never blame the user, never say "Oops".
+
+Numbers beat adjectives: **71 characters** on the identity line, **120** in the
+bucket, **5 s** to vanish. A limit is written as a boundary — "the network layer
+can see your IP on clearnet" — never as a disclaimer. The claim is stated at
+full strength and does not apologise for itself.

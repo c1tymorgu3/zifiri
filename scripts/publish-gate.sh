@@ -125,7 +125,10 @@ $OUT"
   fi
 else
   method="grep fallback (gitleaks and trufflehog not installed)"
-  capture git grep -nIE "$scan_pattern"
+  # The scanner's own pattern and its documentation contain the shapes it
+  # looks for; excluding them is not a loophole, it is the only way the check
+  # can report anything other than itself.
+  capture git grep -nIE "$scan_pattern" -- . ':!scripts/publish-gate.sh' ':!docs/publish-gate.md'
   if [ -z "$OUT" ]; then
     add c PASS "secret scan clean (grep fallback)" "method: $method"
   else
