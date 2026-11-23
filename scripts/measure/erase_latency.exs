@@ -61,7 +61,7 @@ defmodule EraseLatency do
        threshold passes — that is the "time to absence".
 
   Output: the erase time, the scan counts before/after, a JSON report in
-  scripts/measure/results/, and a GEÇTİ/KALDI verdict against
+  scripts/measure/results/, and a PASS/FAIL verdict against
   "canaries absent within --threshold-ms".
   """
 

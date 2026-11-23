@@ -3,35 +3,36 @@ defmodule Zifiri.TimingTest do
   `docs/spec.md` §Two modes, silent mode: when a bucket closes, 120 bodies come out
   **at once**, and their order must not say which one is the real message.
 
-  İki şey ölçülür:
+  Two things are measured:
 
-    1. **Sıra rastgele mi** — aynı 120 mesaj aynı sırayla 10 kez kovaya konup
-       boşaltılır; 10 boşaltmanın çoğu farklı permütasyon olmalı ve gerçek
-       mesajın konumu her seferinde aynı yerde kalmamalı.
-    2. **Konum tekdüze mi** — 1 gerçek + 119 decoy, 1000 kez boşaltılır; gerçek
-       mesajın 0-tabanlı konumu 0..119 üzerinde tekdüze dağılmalı. Tekdüze
-       dağılımın ortalaması 59.5, standart sapması `sqrt((n²-1)/12) = 34.64`.
+    1. **Is the order random** — the same 120 messages are put into the bucket in
+       the same order and drained 10 times; most of the 10 drains must be
+       different permutations, and the real message's position must not stay in
+       the same place every time.
+    2. **Is the position uniform** — 1 real + 119 decoys, drained 1000 times; the
+       real message's 0-based position must be uniform over 0..119. A uniform
+       distribution has mean 59.5 and standard deviation `sqrt((n²-1)/12) = 34.64`.
 
-  ## Eşikler ve gerekçeleri
+  ## Thresholds and why
 
-  | ölçüm | beklenen | eşik | gerekçe |
+  | measure | expected | threshold | why |
   |---|---|---|---|
-  | farklı permütasyon (10) | ~10 | ≥ 9 | 120! permütasyonda iki çakışma beklenmez |
-  | ortalama konum | 59.5 | \\|x̄−59.5\\| < 6 | SE = 34.64/√1000 ≈ 1.10; 6 ≈ 5.4 SE |
-  | standart sapma | 34.64 | 31 ≤ s ≤ 38 | s'nin SE'si ≈ 0.77; aralık ±4 SE |
-  | ki-kare (12 bin, df=11) | 11 | < 31.26 | χ²(11, p=0.001) kritik değeri |
-  | en boş bin | 83.3 | > 40 | bin sayımının SD'si ≈ 8.7; 40 ≈ 5σ altı |
+  | distinct permutations (10) | ~10 | ≥ 9 | with 120! permutations two collisions are not expected |
+  | mean position | 59.5 | \\|x̄−59.5\\| < 6 | SE = 34.64/√1000 ≈ 1.10; 6 ≈ 5.4 SE |
+  | standard deviation | 34.64 | 31 ≤ s ≤ 38 | the SE of s ≈ 0.77; range ±4 SE |
+  | chi-square (12 bins, df=11) | 11 | < 31.26 | χ²(11, p=0.001) critical value |
+  | emptiest bin | 83.3 | > 40 | the SD of a bin count ≈ 8.7; 40 ≈ 5σ below |
 
-  Görevdeki örnek eşik `|ortalama−60| < 12` idi; 12, SE'nin 11 katıdır ve
-  belirgin biçimde yanlı bir karıştırıcıyı bile geçirirdi, bu yüzden 6'ya
-  çekildi. Tohum sabit olduğu için bu test deterministik: aynı koşu, aynı
-  sayılar; eşikler yine de ölçümün üstünde rahat bir payla duruyor.
+  The example threshold in the task was `|mean−60| < 12`; 12 is 11 SE and would
+  let even a clearly biased shuffler through, so it was pulled in to 6. The seed
+  is fixed, so this test is deterministic: same run, same numbers; the thresholds
+  still sit above the measurement with a comfortable margin.
 
-  ## Determinizm ve yalıtım
+  ## Determinism and isolation
 
-  `:rand` süreç-yereldir; `setup` her test sürecinde tohumlar. `Zifiri.Bucket`
-  ve `Zifiri.Chat.Decoy` süreçler arası tek ETS tablosu kullandığı için bu
-  modül `async: false`.
+  `:rand` is process-local; `setup` seeds in every test process. Because
+  `Zifiri.Bucket` and `Zifiri.Chat.Decoy` share a single cross-process ETS table,
+  this module is `async: false`.
   """
 
   use ExUnit.Case, async: false
@@ -65,7 +66,7 @@ defmodule Zifiri.TimingTest do
     %{batch: batch}
   end
 
-  test "aynı girdi 10 kez boşaltılınca sıra değişiyor", %{batch: batch} do
+  test "the order changes when the same input is drained 10 times", %{batch: batch} do
     ids = Enum.map(batch, & &1.id)
 
     orders =
@@ -76,7 +77,7 @@ defmodule Zifiri.TimingTest do
         Enum.map(items, & &1.id)
       end
 
-    # Her boşaltma girdinin tamamını, kayıpsız ve tekrarsız taşır.
+    # Every drain carries the whole input, lossless and without duplicates.
     for order <- orders do
       assert Enum.sort(order) == Enum.sort(ids)
     end
@@ -86,22 +87,22 @@ defmodule Zifiri.TimingTest do
     distinct_positions = positions |> Enum.uniq() |> length()
 
     IO.puts(
-      "[timing] 10 boşaltma: #{distinct_orders} farklı permütasyon, " <>
-        "#{distinct_positions} farklı gerçek-konum #{inspect(positions)}"
+      "[timing] 10 drains: #{distinct_orders} distinct permutations, " <>
+        "#{distinct_positions} distinct real-positions #{inspect(positions)}"
     )
 
     assert distinct_orders >= 9,
-           "10 boşaltmada yalnız #{distinct_orders} farklı permütasyon"
+           "only #{distinct_orders} distinct permutations in 10 drains"
 
     assert distinct_positions >= 7,
-           "gerçek mesaj 10 boşaltmada yalnız #{distinct_positions} farklı konumda"
+           "the real message was in only #{distinct_positions} distinct positions in 10 drains"
 
-    # Hiçbiri giriş sırası değil: karıştırma gerçekten çalışıyor, "shuffle"
-    # adı verilmiş bir `Enum.reverse/1` değil.
+    # None of them is the input order: the shuffle really works, it is not an
+    # `Enum.reverse/1` that has been named "shuffle".
     refute Enum.any?(orders, &(&1 == ids))
   end
 
-  test "gerçek mesajın konumu 0..119 üzerinde tekdüze (1000 örnek)", %{batch: batch} do
+  test "the real message's position is uniform over 0..119 (1000 samples)", %{batch: batch} do
     positions =
       for _ <- 1..@trials do
         fill(batch)
@@ -115,7 +116,7 @@ defmodule Zifiri.TimingTest do
     mean = Enum.sum(positions) / @trials
     sd = :math.sqrt(Enum.sum(Enum.map(positions, fn p -> (p - mean) ** 2 end)) / @trials)
 
-    # 12 bin × 10 konum; her bin 0..119 aralığının onda biri.
+    # 12 bins × 10 positions; each bin is a tenth of the 0..119 range.
     bins = Enum.frequencies_by(positions, &div(&1, 10))
     counts = for index <- 0..11, do: Map.get(bins, index, 0)
     expected = @trials / 12
@@ -128,35 +129,35 @@ defmodule Zifiri.TimingTest do
     critical = chi2_critical(11, 3.0902)
 
     IO.puts(
-      "[timing] 1000 örnek: ortalama=#{Float.round(mean, 2)} " <>
-        "(beklenen #{@expected_mean}), sd=#{Float.round(sd, 2)} " <>
-        "(beklenen #{Float.round(@expected_sd, 2)})"
+      "[timing] 1000 samples: mean=#{Float.round(mean, 2)} " <>
+        "(expected #{@expected_mean}), sd=#{Float.round(sd, 2)} " <>
+        "(expected #{Float.round(@expected_sd, 2)})"
     )
 
     IO.puts(
-      "[timing] ki-kare(12 bin, df=11)=#{Float.round(chi2, 2)}, " <>
-        "kritik(p=0.001)=#{Float.round(critical, 2)}, bin sayımları=[#{Enum.join(counts, ", ")}]"
+      "[timing] chi-square(12 bins, df=11)=#{Float.round(chi2, 2)}, " <>
+        "critical(p=0.001)=#{Float.round(critical, 2)}, bin counts=[#{Enum.join(counts, ", ")}]"
     )
 
     assert abs(mean - @expected_mean) < 6.0,
-           "ortalama #{Float.round(mean, 2)}; beklenen #{@expected_mean} ± 6"
+           "mean #{Float.round(mean, 2)}; expected #{@expected_mean} ± 6"
 
     assert sd > 31.0 and sd < 38.0,
-           "standart sapma #{Float.round(sd, 2)}; beklenen #{Float.round(@expected_sd, 2)} (31..38)"
+           "standard deviation #{Float.round(sd, 2)}; expected #{Float.round(@expected_sd, 2)} (31..38)"
 
     assert chi2 < critical,
-           "ki-kare #{Float.round(chi2, 2)} > kritik #{Float.round(critical, 2)}"
+           "chi-square #{Float.round(chi2, 2)} > critical #{Float.round(critical, 2)}"
 
     assert Enum.min(counts) > 40,
-           "en boş bin #{Enum.min(counts)}; beklenen ≈ #{Float.round(expected, 1)}"
+           "emptiest bin #{Enum.min(counts)}; expected ≈ #{Float.round(expected, 1)}"
   end
 
-  test "boş kova boş döner, kayıp ve tekrar yok" do
+  test "an empty bucket drains empty, with no loss and no duplicate" do
     %{items: [], size: 0} = Bucket.drain()
     assert Bucket.size() == 0
   end
 
-  ## Yardımcılar
+  ## Helpers
 
   defp fill(batch) do
     Bucket.reset()
@@ -164,13 +165,13 @@ defmodule Zifiri.TimingTest do
     assert Bucket.size() == @total
   end
 
-  # Tek gerçek mesaj: gerçek istemcinin imzaladığı 4 KB çerçeve. Kimliği
-  # `:real`; decoy'ların kimliği tamsayı. Bu etiket yalnızca testin kendi
-  # ölçümü için — tel üstünde görünmez (`Message.to_json/1` `id`yi taşır ama
-  # id sunucu sırasıdır, decoy'lar da aynı alanı taşır).
+  # The single real message: the 4 KB frame the real client signs. Its id is
+  # `:real`; the decoys' ids are integers. This label is for the test's own
+  # measurement only — it never appears on the wire (`Message.to_json/1` carries
+  # `id`, but id is a server sequence number and the decoys carry the same field).
   defp real_message do
     {pubkey, priv} = :crypto.generate_key(:eddsa, :ed25519)
-    payload = "Yarın sabah dokuzda buluşalım mı, kahve içeriz."
+    payload = "Shall we meet tomorrow at nine, and grab a coffee."
     padding = 4096 - 4 - byte_size(payload)
     body = <<byte_size(payload)::unsigned-big-32, payload::binary, 0::size(padding)-unit(8)>>
     ctr = 1

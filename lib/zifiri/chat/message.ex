@@ -9,7 +9,7 @@ defmodule Zifiri.Chat.Message do
   Every variable-length field is length-prefixed and the counter is fixed
   width, so no two distinct `(room, epoch, ctr, body)` tuples can produce the
   same bytes. Without that separator a signature taken from one room verifies
-  in another, and a signature taken from the forum write path would verify
+  in another, and a signature taken from an earlier write path would verify
   here.
 
   The server verifies and forgets who signed: it keeps the public key because

@@ -1,4 +1,4 @@
-# Publish-path load measurement (plan §16: "yayın gecikmesi p95").
+# Publish-path load measurement (plan §16: "publication latency p95").
 #
 #   MIX_ENV=test mix run --no-start scripts/load/publish_load.exs
 #
@@ -88,7 +88,7 @@ defmodule PublishLoad do
         token: :crypto.strong_rand_bytes(32),
         envelope: envelope,
         bucket: bucket,
-        title: "yük testi #{i}",
+        title: "load test #{i}",
         price: i * 100
       }
     end
@@ -105,7 +105,7 @@ defmodule PublishLoad do
   end
 
   defp payload(i, bucket) do
-    prefix = "yük testi açıklaması #{i} "
+    prefix = "load test description #{i} "
     filler = max(bucket - 4 - byte_size(prefix) - 1, 1)
     prefix <> String.duplicate("x", filler)
   end

@@ -88,7 +88,7 @@ defmodule Zifiri.Chat.DecoyShapeTest do
     # The real frame decrypts with the room key and yields the sentence.
     plaintext = open(room_key, real.envelope)
     assert is_binary(plaintext)
-    assert plaintext =~ "Yarın sabah dokuzda buluşalım mı"
+    assert plaintext =~ "Shall we meet tomorrow at nine"
 
     # The decoy does not: its key was thrown away, not the room key.
     assert :error = open(room_key, decoy.envelope)
@@ -173,7 +173,7 @@ defmodule Zifiri.Chat.DecoyShapeTest do
   # A real write: an ordinary sentence, length-prefixed and zero-padded, then
   # sealed with the room key. The ciphertext is what the observer sees.
   defp real_frame(epoch, ts, room_key, i) do
-    text = "Yarın sabah dokuzda buluşalım mı? Kahveyi ben ısmarlarım, sen pastayı getir. (#{i})"
+    text = "Shall we meet tomorrow at nine? I'll get the coffee, you bring the cake. (#{i})"
     payload = <<byte_size(text)::unsigned-big-32, text::binary>>
     padding = :binary.copy(<<0>>, @plaintext_bytes - byte_size(payload))
     envelope = seal(room_key, payload <> padding)

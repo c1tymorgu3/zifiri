@@ -1,6 +1,6 @@
 defmodule Zifiri.Telemetry do
   @moduledoc """
-  Counter-only telemetry (plan §5.1: "telemetry'de yalnız sayaç").
+  Counter-only telemetry (plan §5.1: "counters only in telemetry").
 
   The handler pattern-matches on the event name and throws away both
   measurements and metadata before doing anything. That is the point: a

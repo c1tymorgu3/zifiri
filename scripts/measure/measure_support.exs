@@ -133,7 +133,7 @@ defmodule MeasureSupport do
   @doc "Prints the verdict line and returns the boolean."
   @spec verdict(String.t(), boolean()) :: boolean()
   def verdict(label, passed?) do
-    IO.puts("\n#{label}: #{if passed?, do: "GEÇTİ (PASS)", else: "KALDI (FAIL)"}")
+    IO.puts("\n#{label}: #{if passed?, do: "PASS", else: "FAIL"}")
     passed?
   end
 end

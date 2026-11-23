@@ -4,11 +4,14 @@
  * A chat has no single right answer: one person wants to speak now, another
  * wants not to be seen speaking. So the choice is explicit:
  *
- *  - `fast`: the message goes out at once, into a neighbourhood of five
- *    (the message plus four decoys), so the write moment is ~80% hidden.
+ *  - `fast`: the message goes out at once. The anonymity set is the traffic of
+ *    the last minute, so it is not a fixed size: the composer shows the live
+ *    count, and with no other traffic that count is one — this message and
+ *    nothing else. The delay is zero and the set is stated as it is, never
+ *    dressed up as a fixed neighbourhood.
  *  - `silent`: the message joins a 10-minute bucket that is padded to 120 with
- *    decoys and shuffled before publication, so the write moment is ~99%
- *    hidden. Delay ≤ 10 min.
+ *    decoys and shuffled before publication, so the write moment is hidden in a
+ *    120-wide set. Delay ≤ 10 min.
  *
  * `DEFAULT_MODE` is `silent`: it is the fail-safe for a request that carries no
  * usable choice, and the safe direction for a privacy switch is the slower one.
@@ -33,7 +36,11 @@ export const MODE_DELAY_MS: Record<Mode, number> = {
   silent: 10 * 60 * 1000,
 };
 
-/** Bucket size per mode: fast the last-minute count, silent the 120 bucket. */
+/**
+ * Bucket size per mode. `silent` is the 120-wide bucket; the `fast` entry is
+ * nominal — `anonymityCount(mode, recent)` reads the last minute's traffic for
+ * fast mode instead of this number.
+ */
 export const MODE_ANONYMITY_SET: Record<Mode, number> = {
   fast: 5,
   silent: 120,

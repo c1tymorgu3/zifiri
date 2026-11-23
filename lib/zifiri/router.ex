@@ -3,12 +3,13 @@ defmodule Zifiri.Router do
   HTTP surface for scope v5: listings, the sealed-sender mailbox, rooms, proof
   of work, and "yok ol".
 
-  The forum routes (`/api/posts`, `/api/feed`, `/api/post/:ref`) and the modules
-  behind them are gone: scope v5 has three planes and no forum, and the `posts`
-  table is dropped by a migration. `/api/report` and `/mod/*` stay declared but
-  are bound only when `Zifiri.Mod` is loaded — the moderation plane was written
-  against the forum row (`parent_id`, `mod_state`), so it has no target until it
-  is ported to a v5 table. When the module is absent the routes answer the same
+  The earlier routes (`/api/posts`, `/api/feed`, `/api/post/:ref`) and the modules
+  behind them are gone: scope v5 has three planes and no fourth plane, and the
+  transitional `posts` table from an earlier scope is dropped by a migration.
+  `/api/report` and `/mod/*` stay declared but are bound only when `Zifiri.Mod`
+  is loaded — the moderation plane was written against the earlier row
+  (`parent_id`, `mod_state`), so it has no target until it is ported to a v5
+  table. When the module is absent the routes answer the same
   constant 404 as any unknown path.
 
   ## What every API response shares
@@ -205,8 +206,8 @@ defmodule Zifiri.Router do
   end
 
   # Deleting a listing is an owner operation, not a write that needs a fresh
-  # challenge: the token in the header is already the capability, and the old
-  # forum delete route made the same trade. A proof is not required, so a
+  # challenge: the token in the header is already the capability, and the
+  # earlier delete route made the same trade. A proof is not required, so a
   # client can close a listing with one bodyless request.
   delete "/api/listings/:ref" do
     token = owner_token(conn)
@@ -372,7 +373,7 @@ defmodule Zifiri.Router do
 
   # -- moderation ------------------------------------------------------------
 
-  # The moderation plane was written against the forum row (`parent_id`,
+  # The moderation plane was written against the earlier row (`parent_id`,
   # `mod_state`), and v5 drops that table. The routes stay declared so the
   # surface is complete, but they are bound at request time: with no
   # `Zifiri.Mod` loaded they answer the same constant 404 as any unknown path,

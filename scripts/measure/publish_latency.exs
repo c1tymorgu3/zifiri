@@ -45,7 +45,7 @@ defmodule PublishLatency do
     --help, -h        print this text and exit
 
   Output: p50/p95/p99 of POST /api/listings in milliseconds, a JSON report in
-  scripts/measure/results/, and a GEÇTİ/KALDI verdict against p95 < 2 000 ms.
+  scripts/measure/results/, and a PASS/FAIL verdict against p95 < 2 000 ms.
   The measurement database is deleted on exit, pass or fail.
   """
 

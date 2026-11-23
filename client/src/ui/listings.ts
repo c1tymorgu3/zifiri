@@ -81,7 +81,7 @@ export function fold(text: string): string {
     .toLocaleLowerCase("tr")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
-    .replace(/ı/g, "i");
+    .replace(/\u0131/g, "i");
 }
 
 /**

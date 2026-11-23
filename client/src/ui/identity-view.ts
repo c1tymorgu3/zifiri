@@ -131,9 +131,9 @@ export function matchesVanishPhrase(text: string): boolean {
   if (typeof text !== "string") return false;
   const folded = text
     .normalize("NFC")
-    .replace(/İ/g, "i")
+    .replace(/\u0130/g, "i")
     .replace(/I/g, "i")
-    .replace(/ı/g, "i")
+    .replace(/\u0131/g, "i")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();

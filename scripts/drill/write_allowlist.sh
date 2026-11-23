@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# write_allowlist.sh — zifiri el koyma tatbikatı, ayak 1 (disk imajı)
+# write_allowlist.sh — zifiri seizure drill, leg 1 (disk image)
 #
-# Ne yapar: `docker diff` çıktısını izinli kümeyle karşılaştırır. İzinli küme
-# bu betiğin içinde gömülü DEĞİLDİR: aynı dizindeki `allowlist.txt` dosyasından
-# okunur (--allowlist ile değiştirilebilir). Kümeyi gözden geçirmek için kodu
-# değil, veriyi düzenlersin.
+# What it does: compares the `docker diff` output against the allowed set. The
+# allowed set is NOT embedded in this script: it is read from `allowlist.txt` in
+# the same directory (overridable with --allowlist). To review the set you edit
+# data, not code.
 #
-# allowlist.txt biçimi (satır: <tür> <değer>, # yorum):
+# allowlist.txt format (line: <kind> <value>, # comment):
 #
-#   file            /var/lib/zifiri/zifiri.db      diff'te izinli dosya
-#   dir             /var/lib                     izinli üst dizin (D hariç)
-#   managed         /etc/hosts                   docker'ın yönettiği, bilgi
-#   tmpfs           /tmp                         diff'te görünürse kırmızı
-#   volume-required zifiri.db                    volume'de olması gereken
-#   volume-allowed  zifiri.db-wal                volume'de izinli ad
+#   file            /var/lib/zifiri/zifiri.db      file allowed in diff
+#   dir             /var/lib                     allowed parent dir (except D)
+#   managed         /etc/hosts                   managed by docker, informational
+#   tmpfs           /tmp                         red if it shows up in diff
+#   volume-required zifiri.db                    must exist in the volume
+#   volume-allowed  zifiri.db-wal                allowed name in the volume
 #
-# Değerlerde ${ZIFIRI_DB_DIR} genişletilir.
+# ${ZIFIRI_DB_DIR} is expanded in values.
 #
-# Fazlası = kırmızı (exit 1).
+# Anything extra = red (exit 1).
 #
-# ÖNEMLİ: `docker diff` volume içeriğini göstermez; /var/lib/zifiri bir
-# volume ise zifiri.db satırları diff'te hiç çıkmaz. Bu yüzden volume'un
-# gerçek dosya kümesi --volume-dir ile ayrıca denetlenir (§5.2 madde 2).
+# IMPORTANT: `docker diff` does not show volume contents; if /var/lib/zifiri is
+# a volume, the zifiri.db lines never appear in the diff. That is why the
+# volume's real file set is checked separately with --volume-dir (§5.2 item 2).
 #
-# --json: stdout'a tek bir JSON nesnesi yazar (CI için); insan raporu stderr'e
-# gider. Çıkış kodu JSON'daki "exit" alanıyla aynıdır.
+# --json: writes a single JSON object to stdout (for CI); the human report goes
+# to stderr. The exit code matches the "exit" field in the JSON.
 #
 set -euo pipefail
 
@@ -45,39 +45,39 @@ VERBOSE=0
 
 usage() {
   cat <<EOF
-$PROG — docker diff / volume yazma allowlist denetimi
+$PROG — docker diff / volume write allowlist check
 
-Kullanım:
-  $PROG [CONTAINER] [seçenekler]
-  docker diff CONTAINER | $PROG --stdin [seçenekler]
+Usage:
+  $PROG [CONTAINER] [options]
+  docker diff CONTAINER | $PROG --stdin [options]
 
-Seçenekler:
-  --stdin               diff'i stdin'den oku
-  --diff-file DOSYA     diff'i dosyadan oku
-  --allowlist DOSYA     İzinli küme dosyası (varsayılan: $ALLOWLIST)
-  --volume-dir DIZIN    volume dizinini de denetle (tam dosya kümesi)
-  --allow-empty-diff    boş diff'i yeşil say (varsayılan: kanıtlanmadı)
-  --json                stdout'a JSON yaz (CI için; rapor stderr'e)
-  -v, --verbose         Ayrıntılı: allowlist yolu, satır sayısı, her karar
-  -h, --help            Bu metin
+Options:
+  --stdin               read the diff from stdin
+  --diff-file FILE      read the diff from a file
+  --allowlist FILE      allowed set file (default: $ALLOWLIST)
+  --volume-dir DIR      also check the volume directory (full file set)
+  --allow-empty-diff    count an empty diff as green (default: unproven)
+  --json                write JSON to stdout (for CI; report to stderr)
+  -v, --verbose         Verbose: allowlist path, line count, every decision
+  -h, --help            This text
 
-Ortam: ZIFIRI_CONTAINER (varsayılan: $CONTAINER), ZIFIRI_DB_DIR,
+Environment: ZIFIRI_CONTAINER (default: $CONTAINER), ZIFIRI_DB_DIR,
        DRILL_ALLOWLIST
 
-Çıkış kodları:
-  0  yeşil: izinli kümenin dışında hiçbir şey yok
-  1  kırmızı: allowlist dışı yazma var
-  2  kanıtlanmadı: diff boş, allowlist yok, docker yok ya da hata
+Exit codes:
+  0  green: nothing outside the allowed set
+  1  red: there is a write outside the allowlist
+  2  unproven: diff empty, no allowlist, no docker, or an error
 EOF
 }
 
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 2; }
-warn() { printf '%s: uyarı: %s\n' "$PROG" "$*" >&2; }
+warn() { printf '%s: warning: %s\n' "$PROG" "$*" >&2; }
 vlog() { if ((VERBOSE)); then printf '%s: %s\n' "$PROG" "$*" >&2; fi; }
 
 need_value() {
   if (($# >= 2)) && [[ -n $2 ]]; then return 0; fi
-  die "$1 değer istiyor"
+  die "$1 wants a value"
 }
 
 while (($#)); do
@@ -91,12 +91,12 @@ while (($#)); do
     -v | --verbose) VERBOSE=1; shift ;;
     -h | --help) usage; exit 0 ;;
     --) shift; break ;;
-    -*) printf '%s: bilinmeyen seçenek: %s\n' "$PROG" "$1" >&2; exit 2 ;;
+    -*) printf '%s: unknown option: %s\n' "$PROG" "$1" >&2; exit 2 ;;
     *) CONTAINER=$1; shift ;;
   esac
 done
 
-# ---------------------------------------------------------------- izinli küme
+# ---------------------------------------------------------------- allowed set
 
 ALLOWED_FILES=()
 ALLOWED_DIRS=()
@@ -107,7 +107,7 @@ VOLUME_ALLOWED=()
 
 expand_vars() {
   local v=$1
-  # Tek tırnak bilinçli: aranan şey "${ZIFIRI_DB_DIR}" metninin kendisi.
+  # Single quotes on purpose: what is looked for is the text "${ZIFIRI_DB_DIR}" itself.
   # shellcheck disable=SC2016
   v=${v//'${ZIFIRI_DB_DIR}'/$DB_DIR}
   # shellcheck disable=SC2016
@@ -118,7 +118,7 @@ expand_vars() {
 ALLOWLIST_LINES=0
 load_allowlist() {
   local file=$1 line kind value lineno=0
-  [[ -r $file ]] || die "allowlist okunamadı: $file"
+  [[ -r $file ]] || die "allowlist unreadable: $file"
   while IFS= read -r line || [[ -n $line ]]; do
     lineno=$((lineno + 1))
     line=${line%$'\r'}
@@ -128,7 +128,7 @@ load_allowlist() {
     value=${line#"$kind"}
     value=${value#"${value%%[![:space:]]*}"}
     value=${value%"${value##*[![:space:]]}"}
-    [[ -n $value ]] || die "$file:$lineno: değer yok: $line"
+    [[ -n $value ]] || die "$file:$lineno: no value: $line"
     value=$(expand_vars "$value")
     case $kind in
       file) ALLOWED_FILES+=("$value") ;;
@@ -137,21 +137,21 @@ load_allowlist() {
       tmpfs) TMPFS_REQUIRED+=("$value") ;;
       volume-required) VOLUME_REQUIRED+=("$value") ;;
       volume-allowed) VOLUME_ALLOWED+=("$value") ;;
-      *) die "$file:$lineno: bilinmeyen tür: $kind" ;;
+      *) die "$file:$lineno: unknown kind: $kind" ;;
     esac
     ALLOWLIST_LINES=$((ALLOWLIST_LINES + 1))
   done <"$file"
   if ((ALLOWLIST_LINES == 0)); then
-    die "$file: boş allowlist — her satır ya da her şey izinli olur, ikisi de yanlış"
+    die "$file: empty allowlist — allowing every line or everything is wrong either way"
   fi
 }
 
 load_allowlist "$ALLOWLIST"
-vlog "allowlist: $ALLOWLIST ($ALLOWLIST_LINES kural, ${#ALLOWED_FILES[@]} dosya, ${#ALLOWED_DIRS[@]} dizin)"
+vlog "allowlist: $ALLOWLIST ($ALLOWLIST_LINES rules, ${#ALLOWED_FILES[@]} files, ${#ALLOWED_DIRS[@]} dirs)"
 
 normalize() {
   local p=$1
-  while [[ $p == *//* ]]; do p=${p//\/\//\/}; done
+  while [[ $p == *//* ]]; do p=${p//\//\/}; done
   while [[ $p == */ && $p != / ]]; do p=${p%/}; done
   printf '%s' "$p"
 }
@@ -165,10 +165,10 @@ in_list() {
   return 1
 }
 
-# ---------------------------------------------------------------- diff kaynağı
+# ---------------------------------------------------------------- diff source
 
 WORK=$(mktemp -d "${DRILL_STATE_DIR:-${TMPDIR:-/var/tmp}}/zifiri-diff.XXXXXX" 2>/dev/null) ||
-  WORK=$(mktemp -d) || die "geçici dizin açılamadı"
+  WORK=$(mktemp -d) || die "could not create temp dir"
 # shellcheck disable=SC2064
 trap "rm -rf -- '$WORK'" EXIT
 
@@ -178,22 +178,22 @@ case $SOURCE in
     cat >"$RAW"
     ;;
   diff_file)
-    [[ -r $DIFF_FILE ]] || die "okunamadı: $DIFF_FILE"
+    [[ -r $DIFF_FILE ]] || die "unreadable: $DIFF_FILE"
     cp -- "$DIFF_FILE" "$RAW"
     ;;
   container)
     if ! command -v docker >/dev/null 2>&1; then
-      die "docker bulunamadı; --stdin ya da --diff-file kullan"
+      die "no docker; use --stdin or --diff-file"
     fi
     docker diff "$CONTAINER" >"$RAW" 2>"$WORK/docker.err" ||
-      die "docker diff $CONTAINER başarısız: $(head -n 1 "$WORK/docker.err")"
+      die "docker diff $CONTAINER failed: $(head -n 1 "$WORK/docker.err")"
     ;;
 esac
 
 LINES=$(wc -l <"$RAW" | tr -d ' ')
-vlog "diff: $LINES satır"
+vlog "diff: $LINES lines"
 
-# ---------------------------------------------------------------- karşılaştırma
+# ---------------------------------------------------------------- comparison
 
 VIOLATIONS=()
 MANAGED=()
@@ -205,7 +205,7 @@ while IFS= read -r line || [[ -n $line ]]; do
   case $line in
     [ACD]" "*) : ;;
     *)
-      warn "tanınmayan diff satırı: $line"
+      warn "unrecognised diff line: $line"
       VIOLATIONS+=("?|$line")
       continue
       ;;
@@ -215,14 +215,14 @@ while IFS= read -r line || [[ -n $line ]]; do
 
   if in_list "$path" ${ALLOWED_FILES[@]+"${ALLOWED_FILES[@]}"}; then
     SEEN_ALLOWED+=("$status $path")
-    vlog "izinli dosya: $status $path"
+    vlog "allowed file: $status $path"
     continue
   fi
   if in_list "$path" ${ALLOWED_DIRS[@]+"${ALLOWED_DIRS[@]}"}; then
-    # Dizin üst kayıtları: A (Docker volume mountpoint'i oluşturdu) ya da
-    # C (içerik değişti) olabilir. D (silinmiş) hiç beklenmez.
+    # Directory parent records: A (Docker created the volume mountpoint) or
+    # C (content changed) are possible. D (deleted) is never expected.
     if [[ $status == D ]]; then
-      VIOLATIONS+=("$status|$path (izinli dizin silinmiş)")
+      VIOLATIONS+=("$status|$path (allowed directory deleted)")
     else
       SEEN_ALLOWED+=("$status $path")
     fi
@@ -235,9 +235,9 @@ while IFS= read -r line || [[ -n $line ]]; do
     esac
   done
   if ((hit_tmpfs)); then
-    # tmpfs olmalı; diff'te görünmesi tmpfs'in kurulmadığı anlamına gelir
-    # ve canary'nin diske yazılmasına açık kapı bırakır (§5.1).
-    VIOLATIONS+=("$status|$path (tmpfs değil — §5.1 ihlali)")
+    # It should be tmpfs; seeing it in the diff means tmpfs was not mounted and
+    # that leaves the door open for the canary to be written to disk (§5.1).
+    VIOLATIONS+=("$status|$path (not tmpfs — §5.1 violation)")
     continue
   fi
   if in_list "$path" ${DOCKER_MANAGED[@]+"${DOCKER_MANAGED[@]}"}; then
@@ -245,23 +245,23 @@ while IFS= read -r line || [[ -n $line ]]; do
     continue
   fi
   VIOLATIONS+=("$status|$path")
-  vlog "ihlal: $status $path"
+  vlog "violation: $status $path"
 done <"$RAW"
 
-# ---------------------------------------------------------------- volume kümesi
+# ---------------------------------------------------------------- volume set
 
 VOLUME_EXTRA=()
 VOLUME_MISSING=()
 VOLUME_CHECKED=0
 if [[ -n $VOLUME_DIR ]]; then
-  [[ -d $VOLUME_DIR ]] || die "volume dizini yok: $VOLUME_DIR"
+  [[ -d $VOLUME_DIR ]] || die "volume directory missing: $VOLUME_DIR"
   VOLUME_CHECKED=1
   declare -A PRESENT=()
   while IFS= read -r -d '' entry; do
     name=${entry##*/}
     PRESENT[$name]=1
     if [[ -d $entry ]]; then
-      VOLUME_EXTRA+=("$name/ (dizin)")
+      VOLUME_EXTRA+=("$name/ (directory)")
       continue
     fi
     in_list "$name" ${VOLUME_ALLOWED[@]+"${VOLUME_ALLOWED[@]}"} || VOLUME_EXTRA+=("$name")
@@ -271,7 +271,7 @@ if [[ -n $VOLUME_DIR ]]; then
   done
 fi
 
-# ---------------------------------------------------------------- karar
+# ---------------------------------------------------------------- decision
 
 STATUS=green
 EXIT_CODE=0
@@ -291,50 +291,50 @@ elif ((LINES == 0)); then
   fi
 fi
 
-# ---------------------------------------------------------------- rapor
+# ---------------------------------------------------------------- report
 
 REPORT_FD=1
 if ((JSON)); then REPORT_FD=2; fi
 
-# shellcheck disable=SC2059  # biçim dizgesi bilinçli olarak çağırandan geliyor
+# shellcheck disable=SC2059  # the format string deliberately comes from the caller
 say() { printf "$@" >&"$REPORT_FD"; }
 
-say '\n== yazma allowlist denetimi ==\n'
+say '\n== write allowlist check ==\n'
 case $SOURCE in
-  container) say 'kaynak       : docker diff %s\n' "$CONTAINER" ;;
-  stdin) say 'kaynak       : stdin\n' ;;
-  diff_file) say 'kaynak       : %s\n' "$DIFF_FILE" ;;
+  container) say 'source       : docker diff %s\n' "$CONTAINER" ;;
+  stdin) say 'source       : stdin\n' ;;
+  diff_file) say 'source       : %s\n' "$DIFF_FILE" ;;
 esac
-say 'allowlist    : %s (%d kural)\n' "$ALLOWLIST" "$ALLOWLIST_LINES"
-say 'diff satırı  : %s\n' "$LINES"
-say 'volume       : %s\n\n' "${VOLUME_DIR:-(denetlenmedi)}"
+say 'allowlist    : %s (%d rules)\n' "$ALLOWLIST" "$ALLOWLIST_LINES"
+say 'diff lines   : %s\n' "$LINES"
+say 'volume       : %s\n\n' "${VOLUME_DIR:-(not checked)}"
 
 if ((${#SEEN_ALLOWED[@]})); then
-  say 'İzinli:\n'
+  say 'Allowed:\n'
   for entry in "${SEEN_ALLOWED[@]}"; do say '  %s\n' "$entry"; done
   say '\n'
 fi
 
 if ((${#MANAGED[@]})); then
-  say 'Docker tarafından yönetilen (bilgi):\n'
+  say 'Managed by Docker (informational):\n'
   for entry in "${MANAGED[@]}"; do say '  %s\n' "$entry"; done
   say '\n'
 fi
 
 if ((${#VOLUME_MISSING[@]})); then
-  say 'Volume içinde beklenen dosya yok:\n'
+  say 'Expected file missing from the volume:\n'
   for entry in "${VOLUME_MISSING[@]}"; do say '  %s\n' "$entry"; done
   say '\n'
 fi
 
 if ((${#VOLUME_EXTRA[@]})); then
-  say 'Volume içinde izinsiz dosya:\n'
+  say 'Unlisted file in the volume:\n'
   for entry in "${VOLUME_EXTRA[@]}"; do say '  %s\n' "$entry"; done
   say '\n'
 fi
 
 if ((${#VIOLATIONS[@]})); then
-  say 'ALLOWLIST DIŞI:\n'
+  say 'OUTSIDE THE ALLOWLIST:\n'
   for entry in "${VIOLATIONS[@]}"; do say '  %s\n' "$entry"; done
   say '\n'
 fi
@@ -342,27 +342,27 @@ fi
 case $STATUS in
   red)
     if ((${#VIOLATIONS[@]})); then
-      say 'SONUÇ: KIRMIZI — %d izinsiz yol. Tatbikat başarısız.\n' "${#VIOLATIONS[@]}"
+      say 'RESULT: RED — %d path outside the allowlist. Drill failed.\n' "${#VIOLATIONS[@]}"
     else
-      say 'SONUÇ: KIRMIZI — volume içinde %d izinsiz dosya.\n' "${#VOLUME_EXTRA[@]}"
+      say 'RESULT: RED — %d unlisted file in the volume.\n' "${#VOLUME_EXTRA[@]}"
     fi
     ;;
   unproven)
     if ((${#VOLUME_MISSING[@]})); then
-      say 'SONUÇ: KANITLANMADI — volume eksik: %s\n' "${VOLUME_MISSING[*]}"
+      say 'RESULT: UNPROVEN — volume incomplete: %s\n' "${VOLUME_MISSING[*]}"
     else
-      say 'SONUÇ: KANITLANMADI — diff boş ve volume denetlenmedi.\n'
-      say '       Uygulama hiç yazmamış olabilir; --volume-dir ver ya da\n'
-      say '       yük testinden sonra çalıştır.\n'
+      say 'RESULT: UNPROVEN — diff empty and volume not checked.\n'
+      say '       The app may never have written; pass --volume-dir or\n'
+      say '       run this after a load test.\n'
     fi
     ;;
   green)
     if ((${#MANAGED[@]})); then
-      say 'SONUÇ: YEŞİL — allowlist dışı yazma yok (Docker yönetimli %d satır bilgi).\n' "${#MANAGED[@]}"
+      say 'RESULT: GREEN — no writes outside the allowlist (Docker-managed lines: %d, informational).\n' "${#MANAGED[@]}"
     elif ((LINES == 0)); then
-      say 'SONUÇ: YEŞİL — diff boş (yazma yok).\n'
+      say 'RESULT: GREEN — diff empty (no writes).\n'
     else
-      say 'SONUÇ: YEŞİL — %s satır, hepsi izinli kümede.\n' "$LINES"
+      say 'RESULT: GREEN — %s lines, all inside the allowed set.\n' "$LINES"
     fi
     ;;
 esac
@@ -421,3 +421,4 @@ emit_json() {
 if ((JSON)); then emit_json; fi
 
 exit "$EXIT_CODE"
+

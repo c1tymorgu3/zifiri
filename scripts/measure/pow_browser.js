@@ -217,7 +217,7 @@ async function main() {
 
   process.stdout.write(
     `\nclaim: 20 bits ~ 250 ms in a browser worker (lib/zifiri/pow.ex)\n` +
-      `desktop median ${fmt(desktop.ms_median)} ms → ${passed ? "GEÇTİ (PASS)" : "KALDI (FAIL)"}\n`
+      `desktop median ${fmt(desktop.ms_median)} ms → ${passed ? "PASS" : "FAIL"}\n`
   );
 
   const dir = path.join(__dirname, "results");

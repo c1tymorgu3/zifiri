@@ -208,7 +208,7 @@ else
   fi
 
   if grep -q 'zf-boot-note' "$WORK/root.html"; then
-    no "the boot placeholder (\"yükleniyor…\") is still in the DOM — main.ts never replaced it"
+    no "the boot placeholder (\"loading…\") is still in the DOM — main.ts never replaced it"
   else
     ok "boot placeholder was replaced by the app"
   fi

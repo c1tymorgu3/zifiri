@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# run-all.sh — tatbikatı sırayla koştur, tek tabloda raporla
+# run-all.sh — run the drill in order, report in a single table
 #
-# Sıra keyfi değil:
+# The order is not arbitrary:
 #
-#   0. negatif kontrol   tarayıcı gerçekten buluyor mu? (plant.sh)
-#   1. canary_scan.sh    disk + /proc ortamı + journald
-#   2. write_allowlist   docker diff / volume kümesi
-#   3. memdump_scan.sh   BEAM/nginx bellek dökümü
+#   0. negative control  does the scanner really find things? (plant.sh)
+#   1. canary_scan.sh    disk + /proc environment + journald
+#   2. write_allowlist   docker diff / volume set
+#   3. memdump_scan.sh   BEAM/nginx memory dump
 #
-# Negatif kontrol düşerse kalan adımların "temiz" sonucu GEÇERSİZ sayılır:
-# kör bir tarayıcının yeşili, hiçbir şeyin kanıtı değildir (scripts/SHARE.md).
+# If the negative control fails, the remaining steps' "clean" result is VOID:
+# the green of a blind scanner proves nothing (scripts/SHARE.md).
 #
-# Tablo durumları:
-#   PASS   adım yeşil (exit 0)
-#   FAIL   adım kırmızı (exit 1)
-#   SKIP   adım koşmadı ya da eksik kaldı (exit 2: kanıtlanmadı,
-#          exit 3: ortam eksik — docker yok)
+# Table statuses:
+#   PASS   step green (exit 0)
+#   FAIL   step red (exit 1)
+#   SKIP   step did not run or was incomplete (exit 2: unproven,
+#          exit 3: environment missing — no docker)
 #
-# SKIP yeşil değildir. Docker'ı olmayan bir makinede bu betik asla PASS
-# toplamı vermez; vermesi de yanlış olurdu.
+# SKIP is not green. On a machine without Docker this script never returns a
+# PASS total; doing so would be wrong.
 #
 set -euo pipefail
 
@@ -34,33 +34,33 @@ STATE=${DRILL_STATE_DIR:-${TMPDIR:-/tmp}}
 
 usage() {
   cat <<EOF
-$PROG — bütün el koyma tatbikatını koştur ve özetle
+$PROG — run the whole seizure drill and summarise it
 
-Kullanım:
-  $PROG [seçenekler]
+Usage:
+  $PROG [options]
 
-Seçenekler:
-  --only ADLAR      Yalnız seçili adımlar (virgüllü): kontrol,canary,allowlist,memdump
-  --json            stdout'a JSON özet (CI için); ayrıntılı çıktı stderr'e
-  -v, --verbose     Her adımı --verbose ile koştur, çıktıyı da bas
-  -h, --help        Bu metin
+Options:
+  --only NAMES      Only the selected steps (comma-separated): control,canary,allowlist,memdump
+  --json            JSON summary on stdout (for CI); detailed output on stderr
+  -v, --verbose     Run every step with --verbose and print its output too
+  -h, --help        This text
 
-Ortam:
-  DRILL_STATE_DIR        Geçici durum dizini (varsayılan: $STATE)
-  ZIFIRI_DB_DIR          Yayınlanmış DB dizini (varsayılan: /var/lib/zifiri)
-  DRILL_DOCKER_ROOT      Docker veri dizini (varsayılan: /var/lib/docker)
-  DRILL_TMP_ROOT         Geçici dosya kökü (varsayılan: /tmp)
-  CANARY_TOKEN           Sabit canary; yoksa canary_scan üretir
+Environment:
+  DRILL_STATE_DIR        Temporary state directory (default: $STATE)
+  ZIFIRI_DB_DIR          Published DB directory (default: /var/lib/zifiri)
+  DRILL_DOCKER_ROOT      Docker data directory (default: /var/lib/docker)
+  DRILL_TMP_ROOT         Temporary file root (default: /tmp)
+  CANARY_TOKEN           Fixed canary; if absent canary_scan generates one
 
-Çıkış kodları:
-  0  bütün adımlar PASS
-  1  en az bir FAIL (ya da negatif kontrol düştü → hepsi geçersiz)
-  3  FAIL yok, ama en az bir adım ortam eksikliğinden koşmadı (docker yok)
-  2  FAIL yok, ama en az bir adım kanıtlanmadı
+Exit codes:
+  0  every step PASS
+  1  at least one FAIL (or the negative control failed → all void)
+  3  no FAIL, but at least one step did not run for lack of environment (no docker)
+  2  no FAIL, but at least one step is unproven
 
-Örnek:
+Example:
   ./run-all.sh -v
-  ./run-all.sh --only kontrol,canary
+  ./run-all.sh --only control,canary
   ./run-all.sh --json | jq -r '.steps[] | "\\(.status)\\t\\(.step)"'
 EOF
 }
@@ -68,7 +68,7 @@ EOF
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 2; }
 need_value() {
   if (($# >= 2)) && [[ -n $2 ]]; then return 0; fi
-  die "$1 değer istiyor"
+  die "$1 wants a value"
 }
 
 while (($#)); do
@@ -77,16 +77,16 @@ while (($#)); do
     --json) JSON=1; shift ;;
     -v | --verbose) VERBOSE=1; shift ;;
     -h | --help) usage; exit 0 ;;
-    *) printf '%s: bilinmeyen argüman: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
+    *) printf '%s: unknown argument: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 for s in canary_scan.sh write_allowlist.sh memdump_scan.sh negative/plant.sh; do
-  [[ -x $SELF_DIR/$s ]] || die "betik yok ya da çalıştırılabilir değil: $SELF_DIR/$s"
+  [[ -x $SELF_DIR/$s ]] || die "script missing or not executable: $SELF_DIR/$s"
 done
 
 mkdir -p -- "$STATE" 2>/dev/null || true
-WORK=$(mktemp -d "$STATE/zifiri-runall.XXXXXX") || die "geçici dizin açılamadı"
+WORK=$(mktemp -d "$STATE/zifiri-runall.XXXXXX") || die "could not create temp dir"
 # shellcheck disable=SC2064
 trap "rm -rf -- '$WORK'" EXIT
 
@@ -117,14 +117,14 @@ run_step() {
     3) status=SKIP ;;
     *) status=FAIL ;;
   esac
-  note=$(grep -m1 '^SONUÇ:' "$out" 2>/dev/null | sed 's/^SONUÇ: //' || true)
+  note=$(grep -m1 '^RESULT:' "$out" 2>/dev/null | sed 's/^RESULT: //' || true)
   if [[ -z $note ]]; then
     note=$(grep -m1 -E '^[^ ]+: ' "$out" 2>/dev/null | sed 's/^[^ ]*: //' || true)
   fi
   STEPS+=("$name")
   STATUSES+=("$status")
   CODES+=("$rc")
-  NOTES+=("${note:-(çıktı yok)}")
+  NOTES+=("${note:-(no output)}")
   printf '  %-16s %-4s (exit %s) %s\n' "$name" "$status" "$rc" "${note:0:80}" >&2
   if ((VERBOSE)); then
     sed 's/^/      | /' "$out" >&2 || true
@@ -132,18 +132,18 @@ run_step() {
   return 0
 }
 
-printf '\n== tatbikat: run-all ==\n\n' >&2
+printf '\n== drill: run-all ==\n\n' >&2
 
-if wanted kontrol; then run_step 'negatif kontrol' negative/plant.sh; fi
+if wanted control; then run_step 'negative control' negative/plant.sh; fi
 if wanted canary; then run_step 'canary_scan' canary_scan.sh; fi
 if wanted allowlist; then run_step 'write_allowlist' write_allowlist.sh; fi
 if wanted memdump; then run_step 'memdump_scan' memdump_scan.sh; fi
 
 if ((${#STEPS[@]} == 0)); then
-  die "--only hiçbir adımla eşleşmedi: $ONLY"
+  die "--only matched no step: $ONLY"
 fi
 
-# ---------------------------------------------------------------- karar
+# ---------------------------------------------------------------- decision
 
 CONTROL_FAILED=0
 FAIL_COUNT=0
@@ -153,7 +153,7 @@ for i in "${!STEPS[@]}"; do
   case ${STATUSES[$i]} in
     FAIL)
       FAIL_COUNT=$((FAIL_COUNT + 1))
-      if [[ ${STEPS[$i]} == 'negatif kontrol' ]]; then CONTROL_FAILED=1; fi
+      if [[ ${STEPS[$i]} == 'negative control' ]]; then CONTROL_FAILED=1; fi
       ;;
     SKIP)
       SKIP_COUNT=$((SKIP_COUNT + 1))
@@ -171,28 +171,28 @@ elif ((SKIP_COUNT > 0)); then
   OVERALL=2
 fi
 
-# ---------------------------------------------------------------- tablo
+# ---------------------------------------------------------------- table
 
 table() {
   local i
-  printf '\n%-18s %-6s %-4s %s\n' 'ADIM' 'DURUM' 'KOD' 'NOT'
+  printf '\n%-18s %-6s %-4s %s\n' 'STEP' 'STATUS' 'CODE' 'NOTE'
   printf '%-18s %-6s %-4s %s\n' '------------------' '------' '----' '---'
   for i in "${!STEPS[@]}"; do
     printf '%-18s %-6s %-4s %s\n' "${STEPS[$i]}" "${STATUSES[$i]}" "${CODES[$i]}" "${NOTES[$i]}"
   done
   printf '\n'
   case $OVERALL in
-    0) printf 'TOPLAM: PASS — %d adım yeşil.\n' "${#STEPS[@]}" ;;
+    0) printf 'TOTAL: PASS — %d steps green.\n' "${#STEPS[@]}" ;;
     1)
       if ((CONTROL_FAILED)); then
-        printf 'TOPLAM: FAIL — negatif kontrol düştü.\n'
-        printf '        Tarayıcı kör: diğer adımların sonucu GEÇERSİZ.\n'
+        printf 'TOTAL: FAIL — the negative control failed.\n'
+        printf '       The scanner is blind: every other step is VOID.\n'
       else
-        printf 'TOPLAM: FAIL — %d adım kırmızı.\n' "$FAIL_COUNT"
+        printf 'TOTAL: FAIL — %d steps red.\n' "$FAIL_COUNT"
       fi
       ;;
-    3) printf 'TOPLAM: SKIP — %d adım ortam eksikliğinden koşmadı (docker yok?).\n' "$SKIP_COUNT" ;;
-    2) printf 'TOPLAM: SKIP — %d adım kanıtlanmadı.\n' "$SKIP_COUNT" ;;
+    3) printf 'TOTAL: SKIP — %d steps did not run for lack of environment (no docker?).\n' "$SKIP_COUNT" ;;
+    2) printf 'TOTAL: SKIP — %d steps unproven.\n' "$SKIP_COUNT" ;;
   esac
 }
 

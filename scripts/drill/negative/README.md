@@ -1,93 +1,100 @@
-# Negatif kontrol — neden bu dosya var
+# Negative control — why this file exists
 
-`plant.sh` bu dizinin en önemli betiği. Sebebi tek cümle:
+`plant.sh` is the most important script in this directory. The reason is one
+sentence:
 
-> Yeşil bir tarama hiçbir şey kanıtlamaz. Kırmızı gösteremeyen bir tarayıcının
-> "temiz" demesi, test edilmemiş bir iddiadır.
+> A green scan proves nothing. A scanner that cannot show red when it should,
+> saying "clean", is an untested claim.
 
-## Problem
+## The problem
 
-`canary_scan.sh` sıfır isabetle döndüğünde iki farklı dünya aynı görünür:
+When `canary_scan.sh` returns zero hits, two different worlds look the same:
 
-1. Gerçekten sızıntı yok. İstediğimiz bu.
-2. Tarayıcı bozuk: yanlış kök, yanlış desen, `grep` yerine sessizce hiçbir şey,
-   izin hatası, `find` listesi boş, WAL dosyası okunmuyor, `/proc` yok.
+1. There really is no leak. That is what we want.
+2. The scanner is broken: wrong root, wrong pattern, nothing at all instead of
+   `grep`, a permission error, an empty `find` list, the WAL file not read,
+   no `/proc`.
 
-İkinci durumda çıktı yine "SONUÇ: YEŞİL"dir. Üstelik bu, tatbikatın en pahalı
-hatasıdır: yanlış güven, hiç güvenmemekten kötüdür — çünkü rapor yazılır,
-`docs/verify.md`'de iddia "kanıtlandı" işaretlenir ve bir daha bakılmaz.
+In the second case the output is still "RESULT: GREEN". And that is the drill's
+most expensive mistake: false confidence is worse than no confidence — because
+the report gets written, the claim is marked "verified" in `docs/verify.md`, and
+nobody looks again.
 
-## Çözüm
+## The solution
 
-Kontrollü bir sızıntı üret, tarayıcının onu bulduğunu gör. Bulmuyorsa tarayıcı
-kör, dolayısıyla o makinede alınan hiçbir yeşil sonuç kanıt değil.
+Produce a controlled leak, and see that the scanner finds it. If it does not, the
+scanner is blind, so no green result taken on that machine is evidence.
 
-`plant.sh` canary'yi **üç ayrı taşıma yoluna** bilerek yazar ve üçünün de
-bulunmasını şart koşar:
+`plant.sh` deliberately writes the canary into **three separate transport paths**
+and requires all three to be found:
 
-| # | bitki | yol | neden bu |
+| # | plant | path | why this one |
 |---|---|---|---|
-| A | düz metin | `var/log/nginx/access.log` | en yaygın sızıntı: erişim kaydı |
-| B | JSON log | `var/lib/docker/containers/…/…-json.log` | docker json-file sürücüsü; kaçışlı `\n` içinde IP |
-| C | ortam değişkeni | `/proc/<pid>/environ` | diske hiç yazılmaz; yalnız süreç ortamında durur |
+| A | plain text | `var/log/nginx/access.log` | the most common leak: the access record |
+| B | JSON log | `var/lib/docker/containers/…/…-json.log` | the docker json-file driver; the IP inside an escaped `\n` |
+| C | environment variable | `/proc/<pid>/environ` | never written to disk; it lives only in the process environment |
 
-C özellikle önemli: bir uygulama `X-Forwarded-For` değerini ortam değişkenine
-koyup orada unutabilir. Bu, dosya taramasında görünmez; `/proc` taranmazsa
-sızıntı sessizce yeşil kalır.
+C matters especially: an application can put the `X-Forwarded-For` value into an
+environment variable and forget it there. That is invisible to a file scan; if
+`/proc` is not scanned, the leak stays silently green.
 
-Buna ek olarak bir **yanlış pozitif** kontrolü vardır: masum bir dosyaya
-`172.31.77.70` yazılır (canary `172.31.77.7`). Desen sınır kontrolü yapmıyorsa
-burada yakalanır; yakalanmazsa tarayıcı her `172.31.77.7x` adresinde kırmızı
-yanar ve gürültüden kullanılamaz hale gelir.
+On top of that there is a **false positive** check: `172.31.77.70` is written
+into an innocent file (the canary is `172.31.77.7`). If the pattern does no
+boundary check, it is caught here; if it is not caught, the scanner turns red on
+every `172.31.77.7x` address and becomes unusable from the noise.
 
-## Kullanım
+## Usage
 
 ```bash
-./negative/plant.sh          # kontrolü koştur, bitkileri temizle
-./negative/plant.sh -v       # tarayıcıyı da ayrıntılı koştur
-./negative/plant.sh --keep   # bitkileri bırak, elle incele
+./negative/plant.sh          # run the control, clean up the plants
+./negative/plant.sh -v       # run the scanner verbosely too
+./negative/plant.sh --keep   # leave the plants, inspect by hand
 ```
 
-Çıktı:
+Output:
 
 ```
-  [PASS] yanlış pozitif yok: masum dosya (172.31.77.70) isabet üretmedi
-  [PASS] tarayıcı kırmızı döndü (exit 1)
-  [PASS] A düz metin (access.log)    bulundu (ip-plain)
-  [PASS] B JSON log (docker)          bulundu (ip-plain)
-  [PASS] C ortam (/proc/PID/environ)  bulundu (ip-plain)
+  [PASS] no false positive: the innocent file (172.31.77.70) produced no hit
+  [PASS] the scanner came back red (exit 1)
+  [PASS] A plain text (access.log)    found (ip-plain)
+  [PASS] B JSON log (docker)          found (ip-plain)
+  [PASS] C environment (/proc/PID/environ)  found (ip-plain)
 
-SONUÇ: KONTROL GEÇTİ — tarayıcı üç bitkiyi de buldu, masumu bulmadı.
+RESULT: CONTROL PASSED — the scanner found all three plants and missed the innocent file.
 ```
 
-## Çıkış kodları
+## Exit codes
 
-| kod | anlam | ne yapmalı |
+| code | meaning | what to do |
 |---|---|---|
-| `0` | kontrol geçti | `canary_scan.sh` sonucu bu makinede kanıt sayılabilir |
-| `1` | kontrol düştü, tarayıcı kör | `scan.log`'a bak; tarayıcı düzelene kadar hiçbir yeşil sonucu raporlama |
-| `2` | kontrol koşturulamadı | ortam eksik (bash/grep yok, dizin açılamıyor) |
+| `0` | control passed | the `canary_scan.sh` result on this machine can count as evidence |
+| `1` | control failed, the scanner is blind | look at `scan.log`; report no green result until the scanner is fixed |
+| `2` | the control could not run | environment missing (no bash/grep, the directory cannot be created) |
 
-## Docker gerekmez
+## No Docker needed
 
-Bu kontrolün tamamı host üzerinde koşar: dosya yazma, `sleep` süreci, `grep`.
-Docker yalnız *bitkinin şeklini* taklit eder (json-file biçimi), çalışan bir
-docker gerektirmez. Bu yüzden geliştirme makinesinde de koşabilir — ve
-koşmalıdır: tarayıcıya dokunan her değişiklikten sonra.
+The whole control runs on the host: writing files, a `sleep` process, `grep`.
+Docker only imitates *the shape of the plant* (the json-file format); it does not
+need a running docker. So it can run on a development machine too — and it
+should: after every change that touches the scanner.
 
-`run-all.sh` bu kontrolü ilk adım olarak koşturur ve düşerse kalan adımların
-sonucunu geçersiz sayar.
+`run-all.sh` runs this control as the first step and, if it fails, treats the
+result of the remaining steps as void.
 
-## Ne kanıtlamaz
+## What it does not prove
 
-- **Container içini kanıtlamaz.** Bitkiler host dosya sistemine yazılır.
-  `docker diff`'in gördüğü katman ile bu kontrolün gördüğü dizin aynı şey
-  değildir; container içi sızıntı için `write_allowlist.sh` gerekir.
-- **journald'ı kanıtlamaz.** Bitkiler journal'a yazılmaz; journald ayağı
-  `canary_scan.sh` içinde ayrıca raporlanır (`journald: ATLANDI`).
-- **Bellek ayağını kanıtlamaz.** Bu, `memdump_scan.sh`'in işi; orada da aynı
-  mantık geçerlidir (dökümde canary yoksa döküm alınmamış olabilir).
-- **Ağ ayağını kanıtlamaz.** §4.2'nin `n` ölçüsü ayrı bir iştir.
+- **It does not prove the inside of the container.** The plants are written to
+  the host file system. The layer `docker diff` sees and the directory this
+  control sees are not the same thing; for an in-container leak you need
+  `write_allowlist.sh`.
+- **It does not prove journald.** The plants are not written to the journal; the
+  journald leg is reported separately inside `canary_scan.sh`
+  (`journald: SKIPPED`).
+- **It does not prove the memory leg.** That is `memdump_scan.sh`'s job; the same
+  reasoning applies there (if there is no canary in the dump, maybe no dump was
+  taken).
+- **It does not prove the network leg.** §4.2's `n` measurement is a separate
+  piece of work.
 
-Kontrolün kanıtladığı tek şey dar ama kritiktir: *bu tarayıcı, bu makinede,
-bilerek konmuş bir canary'yi üç taşıma yolunda da görüyor.*
+The only thing the control proves is narrow but critical: *this scanner, on this
+machine, sees a deliberately planted canary on all three transport paths.*

@@ -469,7 +469,7 @@ defmodule LoadSupport do
         _ -> 256
       end
 
-    prefix = "feed seed açıklaması #{i} "
+    prefix = "feed seed description #{i} "
     filler = max(bucket - 4 - byte_size(prefix) - 1, 1)
     {:ok, envelope, ^bucket} = Zifiri.Envelope.encode(prefix <> String.duplicate("x", filler))
     {bucket, envelope}

@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# canary_scan.sh — zifiri el koyma tatbikatı, ayak 1 (disk imajı)
+# canary_scan.sh — zifiri seizure drill, leg 1 (disk image)
 #
-# Ne yapar: sabit bir test ağı IP'sini ve rastgele bir canary dizgesini
-# diskte ve süreç ortamlarında arar. IP dört biçimde aranır:
+# What it does: searches for a fixed test-network IP and a random canary string
+# on disk and in process environments. The IP is searched in four forms:
 #
-#   1. düz metin          172.31.77.7
+#   1. plain text          172.31.77.7
 #   2. Erlang tuple        {172,31,77,7}
-#   3. ham dört bayt       (grep -a, bayt deseni; ikili dosyalar)
+#   3. raw four bytes      (grep -a, byte pattern; binary files)
 #   4. IPv4-mapped IPv6    ::ffff:172.31.77.7
 #
-# Taranan yerler (varsayılan): /var/lib/docker (container json log dahil),
+# Places scanned (default): /var/lib/docker (including container json logs),
 # $ZIFIRI_DB_DIR/*.db + *.db-wal + *.db-shm, /tmp, /proc/*/environ,
 # journald (journalctl --since).
 #
-# Tüm grep çağrıları `-a` ile yapılır: WAL/SHM, container json log ve core
-# dosyaları ikilidir; `-a` olmadan grep "binary file matches" der ve satır
-# bağlamını kaybeder. Dosya boyutu bir tarama sınırı değildir
-# (DRILL_MAX_SCAN_BYTES yalnız ham bayt aşamasını sınırlar).
+# Every grep call uses `-a`: WAL/SHM, container json logs and core files are
+# binary; without `-a` grep says "binary file matches" and the line context is
+# lost. File size is not a scan limit (DRILL_MAX_SCAN_BYTES only bounds the raw
+# byte stage).
 #
-# Tek isabet = kırmızı (exit 1).
+# A single hit = red (exit 1).
 #
-# Yalnız coreutils + grep kullanır. Bash 4.4+ (mapfile -d).
+# Uses only coreutils + grep. Bash 4.4+ (mapfile -d).
 #
 set -euo pipefail
 
@@ -46,64 +46,64 @@ HITS_FILE=
 
 usage() {
   cat <<EOF
-$PROG — el koyma tatbikatı, ayak 1: canary taraması
+$PROG — seizure drill, leg 1: canary scan
 
-Kullanım:
-  $PROG [seçenekler]
-  $PROG --root DIZIN [--root DIZIN...]      (hedefli tarama)
+Usage:
+  $PROG [options]
+  $PROG --root DIR [--root DIR...]      (targeted scan)
 
-Seçenekler:
-  --ip ADRES        Test ağı IP'si (varsayılan: $CANARY_IP)
-  --token DIZGE     Kullanılacak canary dizgesi (varsayılan: üretilir)
-  --since ZAMAN     journalctl --since değeri (varsayılan: "$SINCE")
-  --root DIZIN      Ek taranacak dizin (tekrarlanabilir)
-  --docker-root D   Docker veri dizini (varsayılan: $DOCKER_ROOT)
-  --db-dir D        Yayınlanmış DB dizini (varsayılan: $DB_DIR)
-  --tmp-root D      Geçici dosya kökü (varsayılan: $TMP_ROOT)
-  --max-bytes N     Ham bayt aşamasında dosya başına üst sınır (0 = sınırsız)
-  --hits-file F     İsabetleri makine okunur biçimde F dosyasına yaz
-                    (satır: form<TAB>yol<TAB>kirmizi|bilgi)
-  --emit            Yalnız canary üret, gönderim örneğini yazdır, çık
-  --ip-only         Yalnız IP biçimlerini ara
-  --token-only      Yalnız gövde canary'sini ara
-  --no-proc-env     /proc/*/environ taranmasın
-  --journald        --root verilmiş olsa da journald'ı tara
-  -v, --verbose     Ne taranıyor, kaç dosya, hangi aşama — ayrıntılı
-  -h, --help        Bu metin
+Options:
+  --ip ADDRESS      Test-network IP (default: $CANARY_IP)
+  --token STRING    Canary string to use (default: generated)
+  --since TIME      journalctl --since value (default: "$SINCE")
+  --root DIR        Extra directory to scan (repeatable)
+  --docker-root D   Docker data directory (default: $DOCKER_ROOT)
+  --db-dir D        Published DB directory (default: $DB_DIR)
+  --tmp-root D      Temporary file root (default: $TMP_ROOT)
+  --max-bytes N     Per-file cap in the raw byte stage (0 = unlimited)
+  --hits-file F     Write hits to file F in machine-readable form
+                    (line: form<TAB>path<TAB>red|info)
+  --emit            Only generate the canary, print a send example, exit
+  --ip-only         Search only for the IP forms
+  --token-only      Search only for the body canary
+  --no-proc-env     Do not scan /proc/*/environ
+  --journald        Scan journald even if --root was given
+  -v, --verbose     What is being scanned, how many files, which stage
+  -h, --help        This text
 
-Ortam değişkenleri:
+Environment variables:
   CANARY_IP, CANARY_TOKEN, DRILL_SINCE, DRILL_STATE_DIR,
   DRILL_MAX_SCAN_BYTES, ZIFIRI_DB_DIR, DRILL_DOCKER_ROOT, DRILL_TMP_ROOT
 
-Kapsam kuralı:
-  --root verilmezse docker + DB + $TMP_ROOT + journald taranır.
-  --root verilirse YALNIZ verilen kökler taranır; docker/DB/journald
-  otomatik denetimleri kapanır (journald için --journald). Bu, hedefli
-  (negatif kontrol) tarama içindir; tatbikat raporunda tam tarama gerekir.
+Scope rule:
+  Without --root, docker + DB + $TMP_ROOT + journald are scanned.
+  With --root, ONLY the given roots are scanned; the automatic docker/DB/
+  journald checks are off (use --journald for journald). This is for a targeted
+  (negative control) scan; the drill report requires a full scan.
 
-Çıkış kodları:
-  0  yeşil: hiçbir yerde canary yok
-  1  kırmızı: en az bir isabet
-  2  kanıtlanmadı: tarama eksik kaldı (journald yok, izin yok, boş test)
-  3  ortam eksik: docker yok — disk ayağının bir kısmı taranamadı
+Exit codes:
+  0  green: no canary anywhere
+  1  red: at least one hit
+  2  unproven: the scan was incomplete (no journald, no permission, empty test)
+  3  environment missing: no docker — part of the disk leg could not be scanned
 
-  3 yeşil değildir. Sessizce geçen tatbikat, kırmızıdan daha kötüdür.
+  3 is not green. A drill that passes silently is worse than a red one.
 
-Örnek:
-  # 1) canary üret, trafiği gönder
+Example:
+  # 1) generate a canary, send the traffic
   $PROG --emit
-  # 2) aynı canary ile tara
+  # 2) scan with the same canary
   CANARY_TOKEN=zifiri-canary-... $PROG
 EOF
 }
 
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 2; }
-warn() { printf '%s: uyarı: %s\n' "$PROG" "$*" >&2; }
+warn() { printf '%s: warning: %s\n' "$PROG" "$*" >&2; }
 vlog() { if ((VERBOSE)); then printf '%s: %s\n' "$PROG" "$*" >&2; fi; }
 
 need_value() {
   if (($# >= 2)) && [[ -n $2 ]]; then return 0; fi
-  die "$1 değer istiyor"
+  die "$1 wants a value"
 }
 
 while (($#)); do
@@ -125,12 +125,12 @@ while (($#)); do
     -v | --verbose) VERBOSE=1; shift ;;
     -h | --help) usage; exit 0 ;;
     --) shift; break ;;
-    *) printf '%s: bilinmeyen argüman: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
+    *) printf '%s: unknown argument: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 while (($#)); do ROOTS+=("$1"); ROOTS_EXPLICIT=1; shift; done
 
-# ---------------------------------------------------------------- doğrulama
+# ---------------------------------------------------------------- validation
 
 valid_ipv4() {
   local ip=$1 octet
@@ -141,23 +141,24 @@ valid_ipv4() {
   return 0
 }
 
-valid_ipv4 "$CANARY_IP" || die "geçersiz IPv4: $CANARY_IP"
-[[ $MAX_BYTES =~ ^[0-9]+$ ]] || die "DRILL_MAX_SCAN_BYTES sayı olmalı: $MAX_BYTES"
+valid_ipv4 "$CANARY_IP" || die "invalid IPv4: $CANARY_IP"
+[[ $MAX_BYTES =~ ^[0-9]+$ ]] || die "DRILL_MAX_SCAN_BYTES must be a number: $MAX_BYTES"
 
 IFS=. read -r O1 O2 O3 O4 <<<"$CANARY_IP"
 TUPLE="{$O1,$O2,$O3,$O4}"
 MAPPED="::ffff:$CANARY_IP"
-# Düz IP: kendisinden sonra rakam gelmeyen eşleşme (172.31.77.70 yanlış pozitif olmasın).
+# Plain IP: a match not followed by another digit (so 172.31.77.70 is not a false positive).
 PLAIN_RE="(^|[^0-9.])${O1}\.${O2}\.${O3}\.${O4}([^0-9]|$)"
 MAPPED_RE="::ffff:${O1}\.${O2}\.${O3}\.${O4}([^0-9]|$)"
-# Ham bayt deseni: 172.31.77.7 -> \xac\x1f\x4d\x07. grep deseni NUL ya da
-# satır sonu baytı içeremez; öyle bir IP verilirse aşama atlanır (sessizce değil).
+# Raw byte pattern: 172.31.77.7 -> \xac\x1f\x4d\x07. A grep pattern cannot
+# hold a NUL or a newline byte; if such an IP is given the stage is skipped
+# (not silently).
 RAW_OK=1
 for octet in "$O1" "$O2" "$O3" "$O4"; do
   if ((10#$octet == 0 || 10#$octet == 10)); then RAW_OK=0; fi
 done
 if ((RAW_OK)); then
-  # '\\%03o' -> metin kaçış dizisi, sonra %b ile bayta çevrilir (iç içe tırnak yok).
+  # '\\%03o' -> text escape sequence, then converted to bytes with %b (no nested quotes).
   ESC=$(printf '\\%03o\\%03o\\%03o\\%03o' "$O1" "$O2" "$O3" "$O4")
   printf -v RAW_PAT '%b' "$ESC"
 fi
@@ -172,7 +173,7 @@ gen_token() {
   fi
   if [[ -z $hex ]]; then
     hex=$(python3 -c 'import os;print(os.urandom(16).hex())' 2>/dev/null) ||
-      die "rastgele canary üretilemedi"
+      die "could not generate a random canary"
   fi
   printf 'zifiri-canary-%s' "$hex"
 }
@@ -189,7 +190,7 @@ if [[ $MODE == emit ]]; then
 CANARY_TOKEN=$TOKEN
 CANARY_IP=$CANARY_IP
 
-# Test ağından gönderilecek istek (HOST'u kendin koy):
+# Request to send from the test network (put HOST in yourself):
 curl -sS -o /dev/null -w '%{http_code}\n' \\
   --interface $CANARY_IP \\
   -H 'User-Agent: $TOKEN' \\
@@ -198,20 +199,20 @@ curl -sS -o /dev/null -w '%{http_code}\n' \\
   --data-binary '$TOKEN' \\
   'https://HOST/api/posts'
 
-# Sonra aynı canary ile tara:
+# Then scan with the same canary:
 CANARY_TOKEN=$TOKEN $PROG
 EOF
   exit 0
 fi
 
-# ---------------------------------------------------------------- kökler
+# ---------------------------------------------------------------- roots
 
 DO_DOCKER=0
 DO_DB=0
 DO_JOURNAL=0
 if ((ROOTS_EXPLICIT)); then
   if ((FORCE_JOURNALD)); then DO_JOURNAL=1; fi
-  vlog "hedefli tarama: yalnız ${ROOTS[*]}"
+  vlog "targeted scan: only ${ROOTS[*]}"
 else
   ROOTS=("$DOCKER_ROOT" "$DB_DIR" "$TMP_ROOT")
   DO_DOCKER=1
@@ -219,7 +220,7 @@ else
   DO_JOURNAL=1
 fi
 
-# ---------------------------------------------------------------- durum
+# ---------------------------------------------------------------- state
 
 declare -A SEEN=()
 RED_HITS=()
@@ -227,11 +228,11 @@ INFO_HITS=()
 SKIPPED=()
 DOCKER_MISSING=0
 
-# Ham bayt aşaması grep deseniyle ifade edilemiyorsa bu sessiz bir boşluk
-# olmamalı: kanıt eksikse sonuç 2'dir.
+# If the raw byte stage cannot be expressed as a grep pattern that must not be
+# a silent gap: no proof means the result is 2.
 if ((RAW_OK == 0)) && [[ $MODE != token ]]; then
-  warn "ham bayt araması yapılamadı: IP'de 0 ya da 10 baytı var (grep deseni ifade edemez)"
-  SKIPPED+=("ip-raw (IP baytları grep deseni olarak yazılamıyor)")
+  warn "raw byte search not possible: the IP contains a 0 or 10 byte (grep pattern cannot express it)"
+  SKIPPED+=("ip-raw (IP bytes cannot be written as a grep pattern)")
 fi
 
 is_published_db() {
@@ -251,19 +252,19 @@ record() {
   else
     RED_HITS+=("$key")
   fi
-  vlog "isabet: $form $file"
+  vlog "hit: $form $file"
   return 0
 }
 
-# ---------------------------------------------------------------- geçici dizin
+# ---------------------------------------------------------------- temporary dir
 
 STATE_ROOT=${DRILL_STATE_DIR:-${TMPDIR:-/var/tmp}}
 mkdir -p -- "$STATE_ROOT" 2>/dev/null || true
-TMPD=$(mktemp -d "$STATE_ROOT/zifiri-canary.XXXXXX") || die "geçici dizin açılamadı: $STATE_ROOT"
+TMPD=$(mktemp -d "$STATE_ROOT/zifiri-canary.XXXXXX") || die "could not create temp dir: $STATE_ROOT"
 # shellcheck disable=SC2064
 trap "rm -rf -- '$TMPD'" EXIT
 
-# ---------------------------------------------------------------- dosya listesi
+# ---------------------------------------------------------------- file list
 
 FILELIST=$TMPD/files.nul
 : >"$FILELIST"
@@ -271,19 +272,19 @@ FILELIST=$TMPD/files.nul
 for root in "${ROOTS[@]}"; do
   if [[ ! -d $root ]]; then
     if ((DO_DOCKER)) && [[ $root == "$DOCKER_ROOT" ]]; then
-      # Docker yok: sessizce geçmek yok, ayrı çıkış koduyla raporlanır.
+      # No docker: no silent pass, reported with its own exit code.
       DOCKER_MISSING=1
-      printf '%s: docker yok, atlandı: %s\n' "$PROG" "$root" >&2
-      SKIPPED+=("docker ($root yok)")
+      printf '%s: no docker, skipped: %s\n' "$PROG" "$root" >&2
+      SKIPPED+=("docker ($root missing)")
     else
-      warn "dizin yok, atlandı: $root"
+      warn "directory missing, skipped: $root"
       SKIPPED+=("$root")
     fi
     continue
   fi
   n0=$(tr -cd '\000' <"$FILELIST" | wc -c | tr -d ' ')
-  # Betiğin kendi dizini dışlanır: varsayılan IP bu dosyaların içinde yazılı,
-  # yoksa tarama her koşuda kendini bulur.
+  # The script's own directory is excluded: the default IP is written inside
+  # these files, so otherwise the scan would find itself on every run.
   if [[ -n $SELF_DIR ]]; then
     find "$root" -xdev -type f -readable \
       ! -path "$TMPD/*" ! -path "$SELF_DIR/*" -print0 >>"$FILELIST" 2>/dev/null || true
@@ -292,14 +293,15 @@ for root in "${ROOTS[@]}"; do
       ! -path "$TMPD/*" -print0 >>"$FILELIST" 2>/dev/null || true
   fi
   n1=$(tr -cd '\000' <"$FILELIST" | wc -c | tr -d ' ')
-  vlog "kök $root: $((n1 - n0)) dosya"
+  vlog "root $root: $((n1 - n0)) files"
 done
 
 FILE_COUNT=$(tr -cd '\000' <"$FILELIST" | wc -c | tr -d ' ')
-vlog "toplam dosya: $FILE_COUNT"
-((FILE_COUNT > 0)) || die "taranacak dosya bulunamadı (kökler: ${ROOTS[*]})"
+vlog "total files: $FILE_COUNT"
+((FILE_COUNT > 0)) || die "no files to scan (roots: ${ROOTS[*]})"
 
-# SQLite üçlüsü ayrıca raporlanır: WAL ve SHM birincil kanıt yeridir (§6.1).
+# The SQLite trio is reported separately: WAL and SHM are the primary evidence
+# sites (§6.1).
 DB_FILES=0
 if ((DO_DB)); then
   for ext in db db-wal db-shm; do
@@ -307,21 +309,22 @@ if ((DO_DB)); then
     if [[ -d $DB_DIR ]]; then
       c=$(find "$DB_DIR" -maxdepth 1 -type f -name "*.$ext" 2>/dev/null | wc -l | tr -d ' ')
     fi
-    vlog "db: *.$ext -> $c dosya"
+    vlog "db: *.$ext -> $c files"
     DB_FILES=$((DB_FILES + c))
   done
   if ((DB_FILES == 0)); then
-    warn "$DB_DIR altında *.db / *.db-wal / *.db-shm yok — yayınlanmış satır iddiası ölçülemedi"
-    SKIPPED+=("db ($DB_DIR boş ya da yok)")
+    warn "no *.db / *.db-wal / *.db-shm under $DB_DIR — the published-row claim could not be measured"
+    SKIPPED+=("db ($DB_DIR empty or missing)")
   fi
 fi
 
-# ---------------------------------------------------------------- aday dosyalar
+# ---------------------------------------------------------------- candidates
 
-# Dört biçim tek grep çağrısında aranamaz: -E ile -F karışmaz. Bu yüzden
-# iki geçişte aday listesi çıkarılır (E: düz + mapped, F: tuple + ham bayt,
-# ayrıca F: token), sonra yalnız adaylar tek tek sınıflandırılır. 40 bin
-# dosyalı bir /tmp'de bu, biçim başına tam geçişten kat kat ucuzdur.
+# The four forms cannot be searched in one grep call: -E and -F do not mix.
+# So the candidate list is produced in two passes (E: plain + mapped, F: tuple
+# + raw bytes, also F: token), then only the candidates are classified one by
+# one. In a /tmp with 40 thousand files this is far cheaper than a full pass
+# per form.
 CANDS=$TMPD/cands.nul
 : >"$CANDS"
 
@@ -347,9 +350,9 @@ if [[ -s $CANDS ]]; then
     mapfile -d '' -t CANDIDATES < <(sort -u "$CANDS")
   fi
 fi
-vlog "aday dosya: ${#CANDIDATES[@]} / $FILE_COUNT"
+vlog "candidate files: ${#CANDIDATES[@]} / $FILE_COUNT"
 
-# ---------------------------------------------------------------- sınıflandırma
+# ---------------------------------------------------------------- classification
 
 if ((${#CANDIDATES[@]})); then
   for f in "${CANDIDATES[@]}"; do
@@ -368,10 +371,10 @@ if ((${#CANDIDATES[@]})); then
   done
 fi
 
-# ---------------------------------------------------------------- süreç ortamı
+# ---------------------------------------------------------------- process env
 
-# IP bir ortam değişkenine düşerse diske hiç yazılmaz ama /proc/<pid>/environ
-# içinde durur. Bu yüzden ortam da bir tarama yeridir.
+# If the IP lands in an environment variable it is never written to disk but it
+# sits in /proc/<pid>/environ. So the environment is a scan site too.
 PROC_UNREADABLE=0
 if ((SCAN_PROC_ENV)) && [[ $MODE != token ]]; then
   seen_proc=0
@@ -380,16 +383,16 @@ if ((SCAN_PROC_ENV)) && [[ $MODE != token ]]; then
     seen_proc=$((seen_proc + 1))
     if [[ ! -r $envf ]]; then
       PROC_UNREADABLE=$((PROC_UNREADABLE + 1))
-      vlog "ortam okunamadı: $envf"
+      vlog "environment unreadable: $envf"
       continue
     fi
     if grep -aqE -e "$PLAIN_RE" -- "$envf" 2>/dev/null; then record ip-plain "$envf"; fi
     if grep -aqF -e "$TUPLE" -- "$envf" 2>/dev/null; then record ip-tuple "$envf"; fi
   done
-  vlog "/proc: $seen_proc ortam, $PROC_UNREADABLE okunamadı"
+  vlog "/proc: $seen_proc environments, $PROC_UNREADABLE unreadable"
   if ((PROC_UNREADABLE > 0)); then
-    warn "/proc: $PROC_UNREADABLE süreç ortamı okunamadı (başka kullanıcı/root gerekir)"
-    SKIPPED+=("proc-environ ($PROC_UNREADABLE okunamadı)")
+    warn "/proc: $PROC_UNREADABLE process environments unreadable (another user/root required)"
+    SKIPPED+=("proc-environ ($PROC_UNREADABLE unreadable)")
   fi
 fi
 
@@ -401,13 +404,13 @@ if ((DO_JOURNAL)); then
   if command -v journalctl >/dev/null 2>&1; then
     if journalctl --since "$SINCE" --no-pager -o short-iso >"$JOURNAL_FILE" 2>"$TMPD/journal.err"; then
       JOURNAL_OK=1
-      vlog "journald: $(wc -l <"$JOURNAL_FILE" | tr -d ' ') satır"
+      vlog "journald: $(wc -l <"$JOURNAL_FILE" | tr -d ' ') lines"
     else
-      warn "journalctl okunamadı: $(head -n 1 "$TMPD/journal.err" 2>/dev/null)"
+      warn "journalctl unreadable: $(head -n 1 "$TMPD/journal.err" 2>/dev/null)"
       SKIPPED+=("journald")
     fi
   else
-    warn "journalctl yok; journald taranmadı"
+    warn "no journalctl; journald not scanned"
     SKIPPED+=("journald")
   fi
 fi
@@ -417,7 +420,7 @@ if ((JOURNAL_OK)); then
     grep -aqE -e "$PLAIN_RE" "$JOURNAL_FILE" && record ip-plain '<journald>'
     grep -aqF -e "$TUPLE" "$JOURNAL_FILE" && record ip-tuple '<journald>'
     grep -aqE -e "$MAPPED_RE" "$JOURNAL_FILE" && record ip-mapped '<journald>'
-    # journald ikili alanlar ham bayt olarak da bulunabilir
+    # binary journald fields could also hold the raw bytes
     if ((RAW_OK)) && LC_ALL=C grep -aqF -e "$RAW_PAT" "$JOURNAL_FILE"; then
       record ip-raw '<journald>'
     fi
@@ -427,7 +430,7 @@ if ((JOURNAL_OK)); then
   fi
 fi
 
-# ---------------------------------------------------------------- gövde canary'si (dosyalar)
+# ---------------------------------------------------------------- body canary (files)
 
 if [[ $MODE != ip ]]; then
   while IFS= read -r -d '' f; do
@@ -435,20 +438,20 @@ if [[ $MODE != ip ]]; then
   done < <(xargs -0 -r -a "$FILELIST" grep -a -l -Z -F -e "$TOKEN" 2>/dev/null || true)
 fi
 
-# ---------------------------------------------------------------- makine okunur isabet
+# ---------------------------------------------------------------- machine-readable hits
 
 if [[ -n $HITS_FILE ]]; then
   : >"$HITS_FILE"
   for key in ${INFO_HITS[@]+"${INFO_HITS[@]}"}; do
-    printf '%s\t%s\t%s\n' "${key%%|*}" "${key#*|}" bilgi >>"$HITS_FILE"
+    printf '%s\t%s\t%s\n' "${key%%|*}" "${key#*|}" info >>"$HITS_FILE"
   done
   for key in ${RED_HITS[@]+"${RED_HITS[@]}"}; do
-    printf '%s\t%s\t%s\n' "${key%%|*}" "${key#*|}" kirmizi >>"$HITS_FILE"
+    printf '%s\t%s\t%s\n' "${key%%|*}" "${key#*|}" red >>"$HITS_FILE"
   done
-  vlog "isabet dosyası: $HITS_FILE"
+  vlog "hits file: $HITS_FILE"
 fi
 
-# ---------------------------------------------------------------- rapor
+# ---------------------------------------------------------------- report
 
 print_group() {
   local title=$1 key form file count=0
@@ -471,46 +474,48 @@ print_group() {
     count=$((count + 1))
   done
   if ((count > 40)); then
-    printf '  ... %d kayıt daha (toplam %d)\n' "$((count - 40))" "$count"
+    printf '  ... %d more records (total %d)\n' "$((count - 40))" "$count"
   fi
-  printf '  özet:'
+  printf '  summary:'
   for form in "${!forms[@]}"; do printf ' %s=%d' "$form" "${forms[$form]}"; done
   printf '\n\n'
   return 0
 }
 
-printf '\n== canary taraması ==\n'
+printf '\n== canary scan ==\n'
 printf 'IP           : %s\n' "$CANARY_IP"
 printf 'tuple        : %s\n' "$TUPLE"
 printf 'mapped       : %s\n' "$MAPPED"
-printf 'canary       : %s%s\n' "$TOKEN" "$([[ ${FRESH_TOKEN:-0} == 1 ]] && printf ' (bu koşuda üretildi — gövde kanıtı sayılmaz)')"
-if ((JOURNAL_OK)); then JOURNAL_NOTE=; else JOURNAL_NOTE=' (ATLANDI)'; fi
+printf 'canary       : %s%s\n' "$TOKEN" "$([[ ${FRESH_TOKEN:-0} == 1 ]] && printf ' (generated in this run — not counted as body evidence)')"
+if ((JOURNAL_OK)); then JOURNAL_NOTE=; else JOURNAL_NOTE=' (SKIPPED)'; fi
 printf 'journald     : --since "%s"%s\n' "$SINCE" "$JOURNAL_NOTE"
-printf 'proc ortamı  : %s\n' "$([[ $SCAN_PROC_ENV == 1 && $MODE != token ]] && printf 'tarandı' || printf 'atlandı')"
-printf 'kökler       : %s\n' "${ROOTS[*]}"
-printf 'dosya sayısı : %s\n\n' "$FILE_COUNT"
+printf 'proc environ : %s\n' "$([[ $SCAN_PROC_ENV == 1 && $MODE != token ]] && printf 'scanned' || printf 'skipped')"
+printf 'roots        : %s\n' "${ROOTS[*]}"
+printf 'file count   : %s\n\n' "$FILE_COUNT"
 
-if ((${#RED_HITS[@]})); then print_group 'KIRMIZI isabetler:' "${RED_HITS[@]}"; fi
-if ((${#INFO_HITS[@]})); then print_group 'Beklenen (yayınlanmış DB satırı):' "${INFO_HITS[@]}"; fi
+if ((${#RED_HITS[@]})); then print_group 'RED hits:' "${RED_HITS[@]}"; fi
+if ((${#INFO_HITS[@]})); then print_group 'Expected (published DB row):' "${INFO_HITS[@]}"; fi
 
 if ((${#RED_HITS[@]})); then
-  printf 'SONUÇ: KIRMIZI — %d isabet. Tatbikat başarısız.\n' "${#RED_HITS[@]}"
+  printf 'RESULT: RED — %d hits. Drill failed.\n' "${#RED_HITS[@]}"
   exit 1
 fi
 
 if ((DOCKER_MISSING)); then
-  printf 'SONUÇ: ORTAM EKSİK — docker yok, %s taranamadı (diğer kökler temiz).\n' "$DOCKER_ROOT"
-  printf '       Bu koşu yeşil değildir. Docker kur ya da --root ile kapsamı daralt.\n'
+  printf 'RESULT: ENVIRONMENT MISSING — no docker, %s could not be scanned (other roots clean).\n' "$DOCKER_ROOT"
+  printf '        This run is not green. Install Docker or narrow the scope with --root.\n'
   exit 3
 fi
 
 if ((${#SKIPPED[@]})); then
-  printf 'SONUÇ: KANITLANMADI — isabet yok ama şu yerler taranamadı: %s\n' "${SKIPPED[*]}"
+  printf 'RESULT: UNPROVEN — no hits, but these places could not be scanned: %s\n' "${SKIPPED[*]}"
   exit 2
 fi
 
-# Yeşil mesajı ne tarandığını abartmadan söyler: hedefli taramada journald yoktur.
-if ((JOURNAL_OK)); then JN='journald tarandı'; else JN='journald taranmadı'; fi
-if ((SCAN_PROC_ENV)) && [[ $MODE != token ]]; then PN='proc ortamı tarandı'; else PN='proc ortamı taranmadı'; fi
-printf 'SONUÇ: YEŞİL — %d dosya, %s, %s, canary yok.\n' "$FILE_COUNT" "$JN" "$PN"
+# The green message states what was scanned without inflating it: a targeted
+# scan has no journald.
+if ((JOURNAL_OK)); then JN='journald scanned'; else JN='journald not scanned'; fi
+if ((SCAN_PROC_ENV)) && [[ $MODE != token ]]; then PN='proc environ scanned'; else PN='proc environ not scanned'; fi
+printf 'RESULT: GREEN — %d files, %s, %s, no canary.\n' "$FILE_COUNT" "$JN" "$PN"
 exit 0
+

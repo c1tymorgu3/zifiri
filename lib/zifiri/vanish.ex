@@ -21,7 +21,7 @@ defmodule Zifiri.Vanish do
 
   | table | addressed by | why |
   | --- | --- | --- |
-  | `posts` | `owner_hash` | transitional. The v4 forum row, dropped by `20261122220000_drop_posts.exs`. It stays in the list because the list is checked against the live schema: a database that has not run that migration yet — a rolling deploy, a restored backup — still holds published bodies, and a wipe that only knew about `listings` would leave them there. On a migrated database the entry costs one `PRAGMA table_info` that finds nothing. |
+  | `posts` | `owner_hash` | the transitional `posts` table from an earlier scope, dropped by `20261122220000_drop_posts.exs`. It stays in the list because the list is checked against the live schema: a database that has not run that migration yet — a rolling deploy, a restored backup — still holds published bodies, and a wipe that only knew about `listings` would leave them there. On a migrated database the entry costs one `PRAGMA table_info` that finds nothing. |
   | `listings` | `owner_hash` | the v5 public row. One owner may hold several listings, so the delete is not keyed on a unique column; every listing of every given hash goes. |
   | `mailbox_envelopes` | — | covered by the wipe, never by a delete. See below. |
 

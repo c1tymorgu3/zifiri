@@ -148,7 +148,7 @@ consequences worth writing down:
 
 | thing | status | reason |
 | --- | --- | --- |
-| queue entry / publication turn (`tur yayın süresi`) | **not measured** | the write path in this tree has no queue: `POST /api/listings` validates, redeems the proof and inserts inline, then answers `201`. `Zifiri.Publish.Queue` / `Turn` / `Worker` were removed from `lib/` during the measurement window, so there is no turn to time. |
+| queue entry / publication turn (`publication turn time`) | **not measured** | the write path in this tree has no queue: `POST /api/listings` validates, redeems the proof and inserts inline, then answers `201`. `Zifiri.Publish.Queue` / `Turn` / `Worker` were removed from `lib/` during the measurement window, so there is no turn to time. |
 | production PoW cost (20 bits) | **not measured** | at 20 bits each write is ~1 M hashes; 500 of them is hours of wall clock. The scripts pin 8 bits and say so; the client-side cost at production difficulty is not in any number here. |
 | sustained load (minutes, not seconds) | **not measured** | every run is a burst: 500 writes in 0.5 s, 1 000 reads in 3.4 s. Nothing here says what happens after ten minutes, when the table is larger and the page cache is warm. |
 | concurrency between writes and reads | **not measured** | the two scripts run one after the other; a mixed workload was not attempted. |

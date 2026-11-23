@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# memdump_scan.sh — zifiri el koyma tatbikatı, ayak 2 (bellek dökümü)
+# memdump_scan.sh — zifiri seizure drill, leg 2 (memory dump)
 #
-# Trafik kesildikten sonra bekler, nginx worker'larını yeniler, BEAM ve
-# nginx süreçlerinin belleğini gcore ile döker ve dökümlerde canary arar.
+# After the traffic stops it waits, refreshes the nginx workers, dumps the
+# memory of the BEAM and nginx processes with gcore and searches the dumps for
+# the canary.
 #
-# Neden worker yenileme: eski nginx worker'ları istek sırasında istemci
-# adresini tamponlarında tutmuş olabilir. Yenileme onları öldürür; yeni
-# worker'lar hiç trafik görmediği için temiz olmalıdır. BEAM tarafında
-# canary IP hiç görünmemelidir (unix soket + başlık boşaltma, §5.1).
+# Why refresh the workers: old nginx workers may still hold the client address
+# in their buffers from the request. Refreshing kills them; the new workers saw
+# no traffic at all, so they must be clean. On the BEAM side the canary IP must
+# never appear (unix socket + header stripping, §5.1).
 #
-# Gereksinim: gdb (gcore), coreutils. gcore yoksa betik sessizce geçmez,
-# açık hata verir ve exit 2 döner.
+# Requirement: gdb (gcore), coreutils. If gcore is missing the script does not
+# pass silently: it fails loudly and exits 2.
 #
 set -euo pipefail
 
@@ -32,58 +33,58 @@ VERBOSE=0
 
 usage() {
   cat <<EOF
-$PROG — el koyma tatbikatı, ayak 2: bellek dökümü taraması
+$PROG — seizure drill, leg 2: memory dump scan
 
-Kullanım:
-  $PROG [seçenekler]
+Usage:
+  $PROG [options]
 
-Seçenekler:
-  --quiet-seconds N   Trafik kesildikten sonra beklenecek saniye (varsayılan: $QUIET_SECONDS)
-  --out DIZIN         Dökümlerin yazılacağı dizin (varsayılan: $OUT)
-  --keep              Dökümleri yeşil olsa da silme
-  --no-reload         nginx worker'larını yenileme (eski worker'lar taranır)
-  --include-old       Yenilenemeyen eski worker'ları da dök (kırmızıya yol açar)
-  --dry-run           Sadece ne yapılacağını yazdır
-  --ip ADRES          Test ağı IP'si
-  -v, --verbose       Ayrıntılı: süreçler, döküm boyutları, her tarama adımı
-  -h, --help          Bu metin
+Options:
+  --quiet-seconds N   Seconds to wait after the traffic stops (default: $QUIET_SECONDS)
+  --out DIR           Directory the dumps are written to (default: $OUT)
+  --keep              Do not delete the dumps even when green
+  --no-reload         Do not refresh the nginx workers (old workers are scanned)
+  --include-old       Also dump old workers that could not be refreshed (turns red)
+  --dry-run           Only print what would be done
+  --ip ADDRESS        Test-network IP
+  -v, --verbose       Verbose: processes, dump sizes, every scan step
+  -h, --help          This text
 
-Ortam:
+Environment:
   CANARY_IP, CANARY_TOKEN, DRILL_QUIET_SECONDS, DRILL_OUT,
   NGINX_RELOAD_CMD, DRILL_EXEC_PREFIX
 
-  DRILL_EXEC_PREFIX: komutları container içinde çalıştırmak için,
-  örn. DRILL_EXEC_PREFIX="docker exec -u root zifiri-app"
-  NGINX_RELOAD_CMD: varsayılan 'nginx -s reload' yerine kullanılacak komut.
+  DRILL_EXEC_PREFIX: to run the commands inside the container,
+  e.g. DRILL_EXEC_PREFIX="docker exec -u root zifiri-app"
+  NGINX_RELOAD_CMD: command to use instead of the default 'nginx -s reload'.
 
-Çıkış kodları:
-  0  yeşil: dökümlerde canary IP yok
-  1  kırmızı: canary IP dökümde bulundu
-  2  kanıtlanmadı: gcore yok, reload başarısız, döküm alınamadı
+Exit codes:
+  0  green: no canary IP in the dumps
+  1  red: canary IP found in a dump
+  2  unproven: no gcore, reload failed, dump could not be taken
 EOF
 }
 
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 2; }
-warn() { printf '%s: uyarı: %s\n' "$PROG" "$*" >&2; }
+warn() { printf '%s: warning: %s\n' "$PROG" "$*" >&2; }
 vlog() { if ((VERBOSE)); then printf '%s: %s\n' "$PROG" "$*" >&2; fi; }
 
 while (($#)); do
   case $1 in
-    --quiet-seconds) QUIET_SECONDS=${2:-}; shift 2 || die "değer eksik" ;;
-    --out) OUT=${2:-}; shift 2 || die "değer eksik" ;;
+    --quiet-seconds) QUIET_SECONDS=${2:-}; shift 2 || die "missing value" ;;
+    --out) OUT=${2:-}; shift 2 || die "missing value" ;;
     --keep) KEEP=yes; shift ;;
     --no-reload) DO_RELOAD=0; shift ;;
     --include-old) INCLUDE_OLD=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --ip) CANARY_IP=${2:-}; shift 2 || die "değer eksik" ;;
+    --ip) CANARY_IP=${2:-}; shift 2 || die "missing value" ;;
     -v | --verbose) VERBOSE=1; shift ;;
     -h | --help) usage; exit 0 ;;
-    *) printf '%s: bilinmeyen argüman: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
+    *) printf '%s: unknown argument: %s\n' "$PROG" "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-[[ $QUIET_SECONDS =~ ^[0-9]+$ ]] || die "geçersiz saniye: $QUIET_SECONDS"
-[[ $CANARY_IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || die "geçersiz IPv4: $CANARY_IP"
+[[ $QUIET_SECONDS =~ ^[0-9]+$ ]] || die "invalid seconds: $QUIET_SECONDS"
+[[ $CANARY_IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || die "invalid IPv4: $CANARY_IP"
 
 if [[ -n $EXEC_PREFIX ]]; then
   # shellcheck disable=SC2206
@@ -91,22 +92,22 @@ if [[ -n $EXEC_PREFIX ]]; then
 fi
 run() { "${EXEC[@]}" "$@"; }
 
-# ---------------------------------------------------------------- ön koşullar
+# ---------------------------------------------------------------- preconditions
 
 if ((DRY_RUN == 0)) && ! command -v gcore >/dev/null 2>&1 && [[ -z $EXEC_PREFIX ]]; then
-  die "gcore bulunamadı. gdb kur (Debian/Ubuntu: apt install gdb) ya da
-     DRILL_EXEC_PREFIX ile container içinde çalıştır. Sessizce geçmek yok:
-     bellek kanıtı olmadan tatbikat yeşil sayılmaz."
+  die "gcore not found. Install gdb (Debian/Ubuntu: apt install gdb) or run
+     inside the container with DRILL_EXEC_PREFIX. No silent pass:
+     without memory evidence the drill is not green."
 fi
 if [[ -n $EXEC_PREFIX ]] && ((DRY_RUN == 0)); then
   run sh -c 'command -v gcore >/dev/null' ||
-    die "gcore $EXEC_PREFIX içinde yok. Container'a gdb kur ya da dökümü host'tan al."
+    die "gcore is not available inside $EXEC_PREFIX. Install gdb in the container or take the dump from the host."
 fi
 
 if [[ $EUID -ne 0 ]]; then
   SCOPE=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || printf '0')
   if [[ $SCOPE != 0 ]]; then
-    warn "yama/ptrace_scope=$SCOPE; gcore başarısız olabilir (root ya da aynı kullanıcı gerekir)"
+    warn "yama/ptrace_scope=$SCOPE; gcore may fail (root or the same user is required)"
   fi
 fi
 
@@ -119,19 +120,19 @@ if [[ -z $TOKEN ]]; then
   TOKEN=$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')
   [[ -n $TOKEN ]] || TOKEN=$(python3 -c 'import os;print(os.urandom(16).hex())' 2>/dev/null)
   TOKEN="zifiri-canary-${TOKEN:-00000000000000000000000000000000}"
-  warn "CANARY_TOKEN verilmedi; gövde canary'si anlamsız (yalnız IP aranır)"
+  warn "CANARY_TOKEN not given; the body canary is meaningless (only the IP is searched)"
   SCAN_TOKEN=0
 else
   SCAN_TOKEN=1
 fi
 
-# ---------------------------------------------------------------- bekleme
+# ---------------------------------------------------------------- wait
 
-printf '\n== bellek dökümü taraması ==\n'
+printf '\n== memory dump scan ==\n'
 printf 'IP            : %s\n' "$CANARY_IP"
-printf 'bekleme       : %s sn (trafik kesilmiş olmalı)\n' "$QUIET_SECONDS"
+printf 'wait          : %s s (traffic must have stopped)\n' "$QUIET_SECONDS"
 if ((DRY_RUN)); then
-  printf 'kip           : dry-run, hiçbir şey yapılmadı\n'
+  printf 'mode          : dry-run, nothing was done\n'
 fi
 if ((DRY_RUN == 0 && QUIET_SECONDS > 0)); then
   sleep "$QUIET_SECONDS"
@@ -140,28 +141,28 @@ fi
 # ---------------------------------------------------------------- nginx reload
 
 mapfile -t OLD_WORKERS < <(run pgrep -f 'nginx: worker process' 2>/dev/null || true)
-RELOAD_STATUS="atlandı"
+RELOAD_STATUS="skipped"
 if ((DO_RELOAD)); then
   if ((DRY_RUN)); then
     RELOAD_STATUS="dry-run"
   elif [[ -n $NGINX_RELOAD_CMD ]]; then
-    if $NGINX_RELOAD_CMD >/dev/null 2>&1; then RELOAD_STATUS="tamam (özel komut)"; else RELOAD_STATUS="BAŞARISIZ"; fi
+    if $NGINX_RELOAD_CMD >/dev/null 2>&1; then RELOAD_STATUS="ok (custom command)"; else RELOAD_STATUS="FAILED"; fi
   elif run nginx -s reload >/dev/null 2>&1; then
-    RELOAD_STATUS="tamam"
+    RELOAD_STATUS="ok"
   elif command -v systemctl >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
-    RELOAD_STATUS="tamam (systemctl)"
+    RELOAD_STATUS="ok (systemctl)"
   else
-    RELOAD_STATUS="BAŞARISIZ"
+    RELOAD_STATUS="FAILED"
   fi
 
-  if [[ $RELOAD_STATUS == BAŞARISIZ ]]; then
-    printf 'nginx reload  : BAŞARISIZ\n'
-    die "nginx worker'ları yenilenemedi. NGINX_RELOAD_CMD ver (örn.
-     NGINX_RELOAD_CMD='docker exec zifiri-app nginx -s reload') ya da
-     --no-reload ile eski worker'ları bilerek tara."
+  if [[ $RELOAD_STATUS == FAILED ]]; then
+    printf 'nginx reload  : FAILED\n'
+    die "the nginx workers could not be refreshed. Pass NGINX_RELOAD_CMD (e.g.
+     NGINX_RELOAD_CMD='docker exec zifiri-app nginx -s reload') or scan the old
+     workers on purpose with --no-reload."
   fi
 
-  # Eski worker'ların çıkmasını bekle; çıkmazlarsa dökümleri yanıltıcı olur.
+  # Wait for the old workers to exit; if they do not, the dumps would mislead.
   if ((DRY_RUN == 0 && ${#OLD_WORKERS[@]} > 0)); then
     waited=0
     while ((waited < 30)); do
@@ -174,14 +175,14 @@ if ((DO_RELOAD)); then
       waited=$((waited + 1))
     done
     if ((alive > 0)); then
-      warn "eski nginx worker'ları hâlâ yaşıyor: $alive adet (drain 30 sn)"
-      RELOAD_STATUS="$RELOAD_STATUS, drain eksik"
+      warn "old nginx workers are still alive: $alive of them (30 s drain)"
+      RELOAD_STATUS="$RELOAD_STATUS, drain incomplete"
     fi
   fi
 fi
-printf 'nginx reload  : %s (eski worker: %d)\n' "$RELOAD_STATUS" "${#OLD_WORKERS[@]}"
+printf 'nginx reload  : %s (old workers: %d)\n' "$RELOAD_STATUS" "${#OLD_WORKERS[@]}"
 
-# ---------------------------------------------------------------- süreçler
+# ---------------------------------------------------------------- processes
 
 mapfile -t BEAM_PIDS < <(run pgrep -x beam.smp 2>/dev/null || true)
 if ((${#BEAM_PIDS[@]} == 0)); then
@@ -204,40 +205,40 @@ if ((INCLUDE_OLD)) && ((${#OLD_WORKERS[@]})); then
 fi
 
 if ((${#BEAM_PIDS[@]} == 0 && ${#NGINX_PIDS[@]} == 0)); then
-  die "ne BEAM ne nginx süreci bulundu. Container içindeyse DRILL_EXEC_PREFIX ver."
+  die "neither a BEAM nor an nginx process found. If you are inside a container, pass DRILL_EXEC_PREFIX."
 fi
 
-printf 'BEAM          : %s\n' "${BEAM_PIDS[*]:-(yok)}"
-printf 'nginx         : %s\n' "${NGINX_PIDS[*]:-(yok)}"
-vlog "reload durumu: $RELOAD_STATUS"
-vlog "dökülecek: ${#BEAM_PIDS[@]} BEAM + ${#NGINX_PIDS[@]} nginx süreç"
+printf 'BEAM          : %s\n' "${BEAM_PIDS[*]:-(none)}"
+printf 'nginx         : %s\n' "${NGINX_PIDS[*]:-(none)}"
+vlog "reload status: $RELOAD_STATUS"
+vlog "to dump: ${#BEAM_PIDS[@]} BEAM + ${#NGINX_PIDS[@]} nginx processes"
 
-# ---------------------------------------------------------------- yer kontrolü
+# ---------------------------------------------------------------- space check
 
-mkdir -p -- "$OUT" 2>/dev/null || die "çıktı dizini açılamadı: $OUT"
+mkdir -p -- "$OUT" 2>/dev/null || die "could not create output dir: $OUT"
 if [[ -z $EXEC_PREFIX ]]; then
   FREE_KB=$(df -Pk "$OUT" 2>/dev/null | awk 'NR==2{print $4}' || true)
-  vlog "disk: $OUT üzerinde ${FREE_KB:-?} KB boş"
+  vlog "disk: ${FREE_KB:-?} KB free on $OUT"
   RSS_KB=0
   for pid in "${BEAM_PIDS[@]}" "${NGINX_PIDS[@]}"; do
     rss=$(awk '/^VmRSS:/{print $2}' "/proc/$pid/status" 2>/dev/null || true)
     [[ -n $rss ]] && RSS_KB=$((RSS_KB + rss))
   done
   if [[ -n ${FREE_KB:-} && $FREE_KB -lt $((RSS_KB * 3 / 2)) ]]; then
-    warn "$OUT üzerinde ${FREE_KB}KB boş, süreç RSS toplamı ${RSS_KB}KB. Döküm sığmayabilir."
+    warn "${FREE_KB}KB free on $OUT, total RSS of the processes is ${RSS_KB}KB. The dumps may not fit."
   fi
 fi
 
 if ((DRY_RUN)); then
-  printf 'dökümler      : (dry-run) %s\n\nSONUÇ: KANITLANMADI — dry-run.\n' "$OUT"
+  printf 'dumps         : (dry-run) %s\n\nRESULT: UNPROVEN — dry-run.\n' "$OUT"
   exit 2
 fi
 
-# ---------------------------------------------------------------- döküm
+# ---------------------------------------------------------------- dump
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 DUMPDIR=$OUT/memdump-$STAMP
-mkdir -p -- "$DUMPDIR" || die "döküm dizini açılamadı: $DUMPDIR"
+mkdir -p -- "$DUMPDIR" || die "could not create dump dir: $DUMPDIR"
 
 CORES=()
 FAILED=0
@@ -246,42 +247,42 @@ dump_one() {
   out=$DUMPDIR/$label
   if run gcore -o "$out" "$pid" >"$DUMPDIR/$label.gcore.log" 2>&1; then
     if [[ ! -f $out.$pid ]]; then
-      # DRILL_EXEC_PREFIX ile gcore container içinde yazmış olabilir; o
-      # durumda döküm host'tan okunamaz ve "temiz" sayılamaz.
+      # With DRILL_EXEC_PREFIX gcore may have written inside the container; in
+      # that case the dump cannot be read from the host and cannot be "clean".
       if [[ -n $EXEC_PREFIX ]] && run test -f "$out.$pid"; then
-        die "döküm container içinde oluştu ama host'tan görünmüyor: $out.$pid
-     $OUT dizinini container'a bind mount edin (docker run -v $OUT:$OUT)
-     ya da dökümü host'tan al. Görünmeyen dökümü 'temiz' saymıyoruz."
+        die "the dump was created inside the container but is not visible from the host: $out.$pid
+     bind-mount $OUT into the container (docker run -v $OUT:$OUT)
+     or take the dump from the host. We do not call an invisible dump 'clean'."
       fi
-      printf '  %-14s pid=%-7s BAŞARISIZ (döküm dosyası yok)\n' "$label" "$pid"
+      printf '  %-14s pid=%-7s FAILED (no dump file)\n' "$label" "$pid"
       FAILED=$((FAILED + 1))
       return 1
     fi
     CORES+=("$out.$pid")
-    vlog "döküm yazıldı: $out.$pid"
+    vlog "dump written: $out.$pid"
     printf '  %-14s pid=%-7s %s\n' "$label" "$pid" "$(du -h "$out.$pid" 2>/dev/null | cut -f1)"
     return 0
   fi
-  printf '  %-14s pid=%-7s BAŞARISIZ (%s)\n' "$label" "$pid" "$(tail -n 1 "$DUMPDIR/$label.gcore.log" 2>/dev/null)"
+  printf '  %-14s pid=%-7s FAILED (%s)\n' "$label" "$pid" "$(tail -n 1 "$DUMPDIR/$label.gcore.log" 2>/dev/null)"
   FAILED=$((FAILED + 1))
   return 1
 }
 
-printf 'döküm dizini  : %s\n' "$DUMPDIR"
+printf 'dump dir      : %s\n' "$DUMPDIR"
 for pid in "${BEAM_PIDS[@]}"; do dump_one beam "$pid" || true; done
 for pid in "${NGINX_PIDS[@]}"; do dump_one nginx "$pid" || true; done
 
-((${#CORES[@]})) || die "hiçbir döküm alınamadı ($FAILED başarısız). gdb/ptrace izinlerini kontrol et."
+((${#CORES[@]})) || die "no dump could be taken ($FAILED failed). Check the gdb/ptrace permissions."
 
-# ---------------------------------------------------------------- tarama
+# ---------------------------------------------------------------- scan
 
 RED=0
-printf '\ndöküm taraması:\n'
+printf '\ndump scan:\n'
 for core in "${CORES[@]}"; do
   name=${core##*/}
   flags=()
   hit=0
-  vlog "taranıyor: $core"
+  vlog "scanning: $core"
 
   if grep -aqE -e "$PLAIN_RE" "$core"; then flags+=("ip-plain"); hit=1; fi
   if grep -aqF -e "$TUPLE" "$core"; then flags+=("ip-tuple"); hit=1; fi
@@ -310,35 +311,35 @@ PY
     hit=1
   fi
 
-  token_hit="yok"
+  token_hit="none"
   if ((SCAN_TOKEN)) && grep -aqF -e "$TOKEN" "$core"; then
-    token_hit="VAR (bilgi: yayınlanmış içerik)"
+    token_hit="PRESENT (informational: published content)"
   fi
 
   if ((hit)); then
     RED=$((RED + 1))
-    printf '  %-28s KIRMIZI: %s | token: %s\n' "$name" "${flags[*]}" "$token_hit"
+    printf '  %-28s RED: %s | token: %s\n' "$name" "${flags[*]}" "$token_hit"
   else
-    printf '  %-28s temiz | token: %s\n' "$name" "$token_hit"
+    printf '  %-28s clean | token: %s\n' "$name" "$token_hit"
   fi
 done
 
-# ---------------------------------------------------------------- temizlik
+# ---------------------------------------------------------------- cleanup
 
 if ((RED == 0)) && [[ $KEEP != yes ]]; then
   rm -rf -- "$DUMPDIR"
-  printf '\ndökümler silindi (yeşil). Saklamak için --keep.\n'
+  printf '\ndumps deleted (green). Use --keep to retain them.\n'
 else
-  printf '\ndökümler: %s\n' "$DUMPDIR"
+  printf '\ndumps: %s\n' "$DUMPDIR"
 fi
 
 if ((RED > 0)); then
-  printf '\nSONUÇ: KIRMIZI — %d dökümde canary IP var. Tatbikat başarısız.\n' "$RED"
+  printf '\nRESULT: RED — canary IP found in %d dumps. Drill failed.\n' "$RED"
   exit 1
 fi
 if ((FAILED > 0)); then
-  printf '\nSONUÇ: KANITLANMADI — %d süreç dökülemedi, tarama eksik.\n' "$FAILED"
+  printf '\nRESULT: UNPROVEN — %d processes could not be dumped, the scan is incomplete.\n' "$FAILED"
   exit 2
 fi
-printf '\nSONUÇ: YEŞİL — %d dökümde canary IP yok.\n' "${#CORES[@]}"
+printf '\nRESULT: GREEN — no canary IP in %d dumps.\n' "${#CORES[@]}"
 exit 0

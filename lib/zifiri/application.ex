@@ -62,7 +62,7 @@ end
 
 defmodule Zifiri.Application.VanishSweeper do
   @moduledoc """
-  The daily "yok ol" pass: `Zifiri.Vanish.purge/0` on a timer.
+  The daily purge pass: `Zifiri.Vanish.purge/0` on a timer.
 
   A delete compacts the file before it answers, but compaction is the step
   that can legitimately fail while another reader holds a snapshot — the row
