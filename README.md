@@ -9,7 +9,7 @@
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="704 tests" src="https://img.shields.io/badge/tests-704%20passing-brightgreen?style=flat-square">
   <img alt="36 KiB gzip" src="https://img.shields.io/badge/bundle-36%20KiB%20gzip-blue?style=flat-square">
-  <img alt="51 claims" src="https://img.shields.io/badge/claims-36%2F51%20green-yellow?style=flat-square">
+  <img alt="51 claims" src="https://img.shields.io/badge/claims-40%2F51%20green-yellow?style=flat-square">
   <img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square">
 </p>
 
@@ -161,10 +161,10 @@ who was connected. That is why rooms and mail are claimed separately.
 
 Fifty-one claims live in [docs/claims.md](docs/claims.md), each with a test, a threshold and a
 status. [docs/verify.md](docs/verify.md) carries the command, and CI diffs the two ID sets so
-they cannot drift apart. As of 2026-11-23: **36 green, 11 unproven, 1 flaky**, and 3 that say what is *not*
-claimed, which is how 51 rows add up. The file says so row by row.
+they cannot drift apart. As of 2026-11-25: **40 green, 10 unproven, 1 flaky**. That is the status
+column in [docs/claims.md](docs/claims.md) counted, and no other file keeps its own tally.
 
-The table below is not the flattering subset. It carries the three system-level claims that are
+The table below is not the flattering subset. It carries the two system-level claims that are
 still unproven, because those are the ones a reader should weigh before trusting the rest.
 
 | ID | Claim | Status |
@@ -227,12 +227,13 @@ three times before a sweeper takes over.
 | | Account needed | Who you talked to | Delete means | Logs by default | Self-host |
 |---|---|---|---|---|---|
 | **zifiri** | none | no sender column exists | rows gone, pages zeroed, WAL truncated | none | yes, one SQLite file |
-| **Signal** | phone number | sealed sender; no directory of who talks to whom | messages expire on the device | minimal | no, server is not published |
+| **Signal** | phone number | sealed sender; no directory of who talks to whom | messages expire on the device | minimal | server code is AGPL on GitHub; no supported self-host |
 | **Matrix** | account on a homeserver | the homeserver sees sender and room | redaction, not erasure | homeserver keeps room state | yes |
 | **Tor forum** | often a handle | Tor hides your IP; the post still carries a handle and a time | moderator removes the post | usually yes | yes |
 | **A classic board** | account | full metadata, IP included | admin deletes the row, backups remain | yes | yes |
 
-<sub>Signal from its published sealed-sender spec, Matrix from the client-server spec, the
+<sub>Signal from its published sealed-sender spec and its AGPL server tree
+(github.com/signalapp/Signal-Server), Matrix from the client-server spec, the
 classic board from stock phpBB defaults. Read their docs before quoting this table.</sub>
 
 ## Questions
@@ -300,7 +301,7 @@ Phoenix endpoint ── unix socket ── nginx (access_log off, headers stripp
       ├─ Chat.Store     RAM ring buffer, 500 messages, 15 minutes
       ├─ Mailbox        sealed envelopes, HKDF tag, 72-hour TTL
       ├─ Listings       classifieds, owner token, no seller record
-      └─ Vanish         delete, secure_delete, checkpoint, night vacuum
+      └─ Vanish         delete, checkpoint → VACUUM → checkpoint, no nightly job
                │
             SQLite (one file, one writer, LUKS underneath)
 ```

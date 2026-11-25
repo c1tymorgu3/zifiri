@@ -251,7 +251,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Claims: the ID is the only stable handle on a claim. Prose changes and line
   # numbers rot — the previous version of the docs job cited verify.md:168, and
-  # by the time verify.md was rewritten around C-01…C-49 that line was a
+  # by the time verify.md was rewritten around C-01…C-51 that line was a
   # different claim. An ID survives that; a line number does not.
   # ---------------------------------------------------------------------------
   claims:

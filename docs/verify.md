@@ -265,16 +265,16 @@ Text audit, the same kind as C-37/C-45 (there is no unit test for a sentence):
 
 ```bash
 grep -c 'hides the moment of writing' docs/spec.md   # today: 1
-grep -ni '120 candidates' docs/spec.md README.md
-# today: README.md:37 — "so an observer has 120 candidates and no way to tell
-# which one you wrote." and README.md:185 — "gives 120 candidates whether one
-# person posts or twenty". Both are the room paragraph and both are false for a
-# room; they are being rewritten. C-51 stays None until this grep is empty.
+grep -ni '120 candidates' docs/spec.md README.md     # today: no match
 ```
 
-Status **None** in `docs/claims.md`: the spec side is written, the README side is not,
-and the audit is the row's evidence. The client copy (`client/src/ui/mode.ts`,
-`rooms.ts`) carries the same 120 and is the other half of the same fix.
+Until 2026-11-23 this grep returned `README.md:37` and `README.md:185`, the two room
+sentences that promised 120 candidates. The release pass rewrote both; the row went
+green on 2026-11-25 with the audit returning no match.
+
+Status **Green** in `docs/claims.md`, dated 2026-11-25. The audit is a sentence check,
+so it covers `docs/spec.md` and the README; the client comments that repeated the 120
+figure for a room (`client/src/ui/mode.ts`, `rooms.ts`) were corrected in the same pass.
 
 ---
 

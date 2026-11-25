@@ -27,7 +27,8 @@ import { DEFAULT_MODE, isMode, type Mode } from "./mode";
 /** Silent-mode bucket: ten minutes, aligned to the epoch. */
 export const BUCKET_MS = 10 * 60 * 1000;
 
-/** Decoy target from scope v5: every published bucket holds 120 messages. */
+/** 1:1 plane only: a silent-mode mail bucket is filled to 120 envelopes. A plaintext
+ *  room publishes no decoys (C-50), so its batch is `k`, the writes in it. */
 export const BUCKET_SIZE = 120;
 
 export type MessageStatus = "draft" | "waiting" | "sent" | "failed";

@@ -1,6 +1,6 @@
 # zifiri — claims, tests, thresholds
 
-Snapshot: 2026-11-23 16:05, `mix test` **404 passed, 4 excluded**, `cd client && npx vitest run` **300 passed**.
+Snapshot: 2026-11-25 14:35, `mix test` **404 passed, 4 excluded**, `cd client && npx vitest run` **300 passed**.
 
 The anonymity claim is the product. Everything else in this repository exists to make
 that claim checkable: a test, a command, a number, a date. What an instance publishes
@@ -26,13 +26,13 @@ written in the plan does not make it true.
 Every claim carries a stable ID (`C-01` … `C-51`) so that this file, `docs/verify.md`
 and the README can be diffed against each other instead of against prose.
 
-> **Provenance.** The suite snapshot was taken on **2026-11-23, 15:26**; the
-> per-row solo counts were taken earlier the same day (12:24–15:26), on a checkout
-> whose test tree compiles. `mix test` finished in 8.8 s with **403 passed, 4
-> excluded**; `cd client && npx vitest run` finished with **300 passed** in 15 files.
-> Each row's count also comes from a solo `mix test test/<name>_test.exs`,
+> **Provenance.** The per-row solo counts in §1 were taken on **2026-11-23**
+> (12:24–15:26), on a checkout whose test tree compiles. The suite figures quoted
+> here come from a re-run on **2026-11-25, 14:35**: `mix test` finished in 9.3 s with
+> **404 passed, 4 excluded**; `cd client && npx vitest run` finished with **300 passed**
+> in 15 files. Each row's count also comes from a solo `mix test test/<name>_test.exs`,
 > and the bucket work added 17 tests — 11 in `mailbox_bucket_test`, 6 in
-> `chat_bucket_test` — for a whole-suite total of 403.
+> `chat_bucket_test`.
 > `decoy_shape_test` was rewritten to the 1:1 frame (C-04) and `api_surface_test`'s
 > secret-mode row now expects a 1-message batch (C-50); no test was deleted.
 > The 2026-11-22 snapshot this file used to carry is gone: it described a repository that
@@ -50,10 +50,11 @@ Status dictionary:
 
 | Status | Rows |
 |---|---|
-| Green | 39 |
+| Green | 40 |
 | Flaky | 1 (C-11) |
 | Red | 0 |
-| None | 11 (C-07, C-13, C-21, C-29, C-31, C-35, C-36, C-40, C-42, C-49, C-51) |
+| None | 10 (C-07, C-13, C-21, C-29, C-31, C-35, C-36, C-40, C-42, C-49) |
+| **Total** | **51** |
 
 Nothing is written without a number, a date and a command.
 
@@ -67,11 +68,11 @@ transaction on a single database. The measurement is therefore two commands, not
 
 | Command | Result | Time |
 |---|---|---|
-| `mix test` | **403 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 8.8 s |
+| `mix test` | **404 passed, 4 excluded** (the 4 are the `:integration` e2e rows) | 9.3 s |
 | `cd client && npx vitest run` | **300 passed**, 15 files | 1.9 s |
 
-The per-file runs in §1 were taken one after another on the same checkout; their counts
-sum to 403, so a green row is not an artifact of running it alone.
+The per-file runs in §1 were taken one after another on the same checkout; each one
+passed on its own, so a green row is not an artifact of the suite running together.
 
 The parallel-rewrite window the previous snapshot described is closed. The transitional
 `posts` table is gone from the migrated schema (C-19), `api_surface_test` compiles and
@@ -157,7 +158,6 @@ These are written in the plan but have no test; today they are intent, not claim
 | Fast mode < 1 s, 1/5 neighbourhood (C-07) | `fast_mode_test` | without the mode the user abandons silent mode; "80%" cannot be said without measuring. The default mode itself is C-30 and is green; only the latency is unmeasured |
 | The recipient cannot open a decoy envelope (C-13) | a separate test inside `mailbox_test` | if decoy envelopes look like "you have a message" to the recipient, 1:1 breaks |
 | No logs — deployment level (C-21) | `drill` (script + output) | `no_log_test` inspects code only; proxy/container/BEAM settings are unmeasured |
-| Room content is not confidential (C-51) | README's "120 candidates" sentence has to go first | the spec now says it plainly, but one README line still promises what a room cannot deliver; the audit command is in §6 |
 
 The listings HTTP surface is no longer on this list: `api_surface_test` compiles and
 passes 22/22 today.
@@ -167,8 +167,8 @@ passes 22/22 today.
 ## 4. Known limits of the measurement
 
 1. **The full suite is valid now.** One process, one DB, sandboxed tests:
-   `mix test` → 403 passed, 4 excluded in 8.8 s, and the solo runs in §1 add up to the
-   same 403. The 2026-11-22 failure mode (shared file, lock contention, 130 errors) does
+   `mix test` → 404 passed, 4 excluded in 9.3 s, and the solo runs in §1 were taken on
+   the same checkout. The 2026-11-22 failure mode (shared file, lock contention, 130 errors)
    does not recur on this checkout.
 2. **Timing sensitivity remains.** The `mailbox` sweeper test fell in one 2026-11-22 run
    (5 min window plus a slow machine) and has passed since; there is no fixed-clock
@@ -210,7 +210,7 @@ output of the command run in this session; an unrun row is **None**, never a gue
 | C-48 | "Write it on paper" is not claimed in v1 | 64 characters are not written by hand; claiming it would be a promise the format cannot keep. | text audit (`spec.md` §Identity line) | absent from the v1 copy | **Green (text)** |
 | C-49 | The v2 word list is 27 words | A 12-word list carries 128 bits and cannot hold a 32-byte seed; **27 words** can. | `identity_test` v2 group | 27 words | **None** (v2 is not written) |
 | C-50 | A plaintext room publishes no decoys: a secret-room batch contains exactly the messages written in it, and the candidate author set is `k`, not 120 | Padding a plaintext room would make "120 candidates" a false sentence while the content is readable anyway; the batch must be counted, not assumed. | `chat_bucket_test` (+ `api_surface_test` at the endpoint) | 3 sends → 3 stored rows, bodies byte-identical, 3 distinct pubkeys; 1 secret send over the API → 1 entry | **Green** — 6/6 (+ 22/22) |
-| C-51 | Room content is not confidential: secret mode hides the moment of writing, not what was written | If the text implied a room body was hidden, a user would confide in a channel the server reads in clear. | text audit (`docs/spec.md` §Two modes + §1; README §"Rooms") | the sentence exists in the spec; no text claims room confidentiality or "120 candidates" for a room | **None** — `docs/spec.md` carries the sentence, but README lines 37 and 185 still say "120 candidates" and are being rewritten; re-audit after they land |
+| C-51 | Room content is not confidential: secret mode hides the moment of writing, not what was written | If the text implied a room body was hidden, a user would confide in a channel the server reads in clear. | text audit (`docs/spec.md` §Two modes + §1; README §Rooms) | the sentence exists in the spec; no text claims room confidentiality or "120 candidates" for a room | **Green** — 2026-11-25: `grep -ni '120 candidates' docs/spec.md README.md` returns no match; README §Rooms says the bucket carries no decoys |
 
 **Reading note.** C-38, C-39 and C-40 are three different sentences.
 C-38 is the disk promise — no trace in the file or the `-wal` — and is green.
@@ -229,8 +229,8 @@ while the observer reads the batch anyway (C-51). `Zifiri.Chat.Decoy` still
 exists and `decoy_test` still measures its key discipline (C-06), but nothing in
 `lib/` calls it; the room's only bucket cost is the wait for the drain.
 
-**Limit.** The full suite *was* run today (403 passed, 4 excluded, §0). Every row above
-also has its solo run, and the solo counts match the suite.
+**Limit.** The full suite *was* run today (404 passed, 4 excluded, §0). Every row above
+also has its solo run.
 
 ---
 
@@ -275,14 +275,13 @@ mix run -e 'IO.inspect(Zifiri.Repo.query!("PRAGMA auto_vacuum").rows)'   # expec
 
 # C-51 text audit: the room sentence is there, and nothing claims a room body is hidden
 grep -c 'hides the moment of writing' docs/spec.md   # expected: 1
-grep -ni '120 candidates' docs/spec.md README.md     # expected today: README.md:37, README.md:185
+grep -ni '120 candidates' docs/spec.md README.md     # expected: no match
 ```
 
-The second C-51 command is the audit, not a formality: on 2026-11-23 it returns
-two README lines ("an observer has 120 candidates", "gives 120 candidates whether
-one person posts or twenty"), which is why C-51 is **None** and not green — the
-spec is fixed, the README is not, and the README is edited by the release pass,
-not by this one.
+The second C-51 command is the audit, not a formality. On 2026-11-23 it returned two
+README lines ("an observer has 120 candidates", "gives 120 candidates whether one person
+posts or twenty"), which is why C-51 was **None**. The release pass rewrote both; on
+2026-11-25 the same command returns no match and the row is green.
 
 A change that turns a row green is recorded in this document together with the output
 of the same command; the words "done" on their own are not accepted.

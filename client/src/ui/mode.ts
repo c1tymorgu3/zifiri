@@ -9,9 +9,11 @@
  *    count, and with no other traffic that count is one — this message and
  *    nothing else. The delay is zero and the set is stated as it is, never
  *    dressed up as a fixed neighbourhood.
- *  - `silent`: the message joins a 10-minute bucket that is padded to 120 with
- *    decoys and shuffled before publication, so the write moment is hidden in a
- *    120-wide set. Delay ≤ 10 min.
+ *  - `silent`: on the 1:1 plane the message joins a 10-minute bucket that is padded
+ *    to 120 with decoys and shuffled before publication, so the write moment is
+ *    hidden in a 120-wide set. A plaintext room publishes no decoys, so its bucket
+ *    holds `k` writes; the moment is hidden there too, the author set is not.
+ *    Delay ≤ 10 min.
  *
  * `DEFAULT_MODE` is `silent`: it is the fail-safe for a request that carries no
  * usable choice, and the safe direction for a privacy switch is the slower one.

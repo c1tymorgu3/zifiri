@@ -73,7 +73,7 @@ green, the sentence on the right was executed against that commit.
 - **`architecture`** — greps over `lib/`, `test/` and `infra/`: no `Logger.info`/`IO.inspect`/`dbg(`,
   no peer or proxy header read outside `lib/zifiri/transport.ex`, no Ecto `log:`, nginx
   `access_log off`, container `USER`/`read_only`/`no-new-privileges`.
-- **`claims`** — both `docs/claims.md` and `docs/verify.md` carry the same `C-01`…`C-49` IDs with no
+- **`claims`** — both `docs/claims.md` and `docs/verify.md` carry the same `C-01`…`C-51` IDs with no
   gap, and the README cites no ID that `claims.md` does not define.
 - **`docs`** — every relative link in `README.md` and `docs/*.md` resolves to a file in the tree.
 - **`e2e`** — a real Chrome against a running `mix phx.server` loads `/`, `/?demo=1` and
